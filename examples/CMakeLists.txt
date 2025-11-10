@@ -1,36 +1,24 @@
-# Examples for Forge library
+# Examples CMakeLists.txt for FORGE
 
-# Basic example
-add_executable(basic_example basic_example.cpp)
-target_link_libraries(basic_example forge)
+cmake_minimum_required(VERSION 3.20)
 
-# Automatic differentiation example
-add_executable(autodiff_example autodiff_example.cpp)
-target_link_libraries(autodiff_example forge)
+# Basic gradient example
+add_executable(basic_gradient basic_gradient.cpp)
+target_link_libraries(basic_gradient PRIVATE forge::forge)
+target_include_directories(basic_gradient PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src ${CMAKE_CURRENT_SOURCE_DIR}/../tools)
 
-# JSON loading example
-add_executable(json_loading_example json_loading_example.cpp)
-target_link_libraries(json_loading_example forge)
+# Multi-variable example
+add_executable(multi_variable multi_variable.cpp)
+target_link_libraries(multi_variable PRIVATE forge::forge)
+target_include_directories(multi_variable PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src ${CMAKE_CURRENT_SOURCE_DIR}/../tools)
 
-# Graph from JSON example (comprehensive)
-add_executable(graph_from_json graph_from_json.cpp)
-target_link_libraries(graph_from_json forge)
+# Performance benchmark example
+add_executable(performance_demo performance_demo.cpp)
+target_link_libraries(performance_demo PRIVATE forge::forge)
+target_include_directories(performance_demo PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src ${CMAKE_CURRENT_SOURCE_DIR}/../tools)
 
-# Copy JSON data files to build directory
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/ops10_function_graph.json
-               ${CMAKE_CURRENT_BINARY_DIR}/ops10_function_graph.json COPYONLY)
-
-# Set output directory for all examples
-set_target_properties(basic_example autodiff_example json_loading_example graph_from_json
-    PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
+# Set output directory for examples
+set_target_properties(basic_gradient multi_variable performance_demo
+    PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
 )
-
-# Add examples to CTest
-add_test(NAME basic_example_test COMMAND basic_example)
-add_test(NAME autodiff_example_test COMMAND autodiff_example)
-add_test(NAME json_loading_example_test 
-         COMMAND json_loading_example
-         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-add_test(NAME graph_from_json_test
-         COMMAND graph_from_json
-         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})

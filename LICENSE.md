@@ -15,3 +15,7 @@ freely, subject to the following restrictions:
 2. Altered source versions must be plainly marked as such, and must not be
    misrepresented as being the original software.
 3. This notice may not be removed or altered from any source distribution.
+
+---
+
+This is The Forge's zlib-style license. It permits broad usage—including modifications and commercial deployment—while requiring that you acknowledge the original authorship and clearly mark any changes made to the code.
