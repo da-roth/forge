@@ -6,6 +6,7 @@
 #include <stdexcept>
 #include <string>
 #include <iostream>
+#include <unordered_set>
 #ifdef _WIN32
 #include <malloc.h>  // For _aligned_malloc and _aligned_free on Windows
 #else
@@ -23,6 +24,8 @@ public:
     explicit ScalarNodeValueBuffer(const forge::Graph& tape)
         : num_nodes_(tape.nodes.size()) {
         diff_inputs_ = tape.diff_inputs;
+        // Build hash set for O(1) lookup in getGradient()
+        diff_inputs_set_.insert(diff_inputs_.begin(), diff_inputs_.end());
         // Initialize identity mapping
         originalToOptimizedMapping_.resize(tape.nodes.size());
         for (size_t i = 0; i < tape.nodes.size(); ++i) {
@@ -64,6 +67,8 @@ public:
                           const std::vector<forge::NodeId>& originalToOptimizedMapping)
         : num_nodes_(tape.nodes.size()), originalToOptimizedMapping_(originalToOptimizedMapping) {
         diff_inputs_ = tape.diff_inputs;
+        // Build hash set for O(1) lookup in getGradient()
+        diff_inputs_set_.insert(diff_inputs_.begin(), diff_inputs_.end());
 
         // Allocate values - one double per node
         size_t totalDoubles = num_nodes_;
@@ -166,7 +171,7 @@ public:
         if (!gradients_) {
             throw std::runtime_error("No gradients computed - no inputs marked with markInputAndDiff()");
         }
-        
+
         // Map original node ID to optimized if mapping is available
         forge::NodeId mappedNode = node;
         if (node < originalToOptimizedMapping_.size()) {
@@ -175,12 +180,12 @@ public:
                 mappedNode = candidate;
             }
         }
-        
-        auto it = std::find(diff_inputs_.begin(), diff_inputs_.end(), mappedNode);
-        if (it == diff_inputs_.end()) {
+
+        // O(1) lookup using hash set instead of O(n) linear search
+        if (diff_inputs_set_.find(mappedNode) == diff_inputs_set_.end()) {
             throw std::runtime_error("Node was not marked for differentiation");
         }
-        
+
         return gradients_[mappedNode];
     }
     
@@ -192,12 +197,43 @@ public:
         if (!gradients_) {
             return {};
         }
-        
+
         std::vector<double> result;
         for (auto node : diff_inputs_) {
             result.push_back(gradients_[node]);
         }
         return result;
+    }
+
+    // Fast batch gradient access - no validation, direct memory access
+    std::vector<double> getGradientsBatch(const std::vector<forge::NodeId>& nodes) const override {
+        std::vector<double> result;
+        if (!gradients_) {
+            return result;
+        }
+        result.resize(nodes.size());  // Resize once, no push_back
+        for (size_t i = 0; i < nodes.size(); ++i) {
+            // Map original node ID to optimized
+            forge::NodeId node = nodes[i];
+            forge::NodeId mappedNode = node;
+            if (node < originalToOptimizedMapping_.size()) {
+                auto candidate = originalToOptimizedMapping_[node];
+                if (candidate != static_cast<forge::NodeId>(UINT32_MAX)) {
+                    mappedNode = candidate;
+                }
+            }
+            // Direct array access - no validation
+            result[i] = gradients_[mappedNode];
+        }
+        return result;
+    }
+
+    // Ultra-fast: direct array read with pre-computed indices (no mapping, no allocation)
+    void getGradientsDirect(const std::vector<size_t>& bufferIndices, double* output) const override {
+        if (!gradients_) return;
+        for (size_t i = 0; i < bufferIndices.size(); ++i) {
+            output[i] = gradients_[bufferIndices[i]];
+        }
     }
     
     void clearGradients() override {
@@ -236,6 +272,7 @@ private:
     double* gradients_ = nullptr;
     uint64_t num_nodes_;
     std::vector<forge::NodeId> diff_inputs_;
+    std::unordered_set<forge::NodeId> diff_inputs_set_;  // O(1) lookup for getGradient()
     std::vector<forge::NodeId> originalToOptimizedMapping_;
 };
 

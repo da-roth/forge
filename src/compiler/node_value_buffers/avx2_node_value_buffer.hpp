@@ -8,6 +8,7 @@
 #include <iostream>
 #include <cstdio>
 #include <cstdlib>
+#include <unordered_set>
 #ifdef _WIN32
 #include <malloc.h>  // For _aligned_malloc and _aligned_free on Windows
 #endif
@@ -20,9 +21,11 @@ namespace forge {
  */
 class AVX2NodeValueBuffer : public INodeValueBuffer {
 public:
-    explicit AVX2NodeValueBuffer(const forge::Graph& tape) 
+    explicit AVX2NodeValueBuffer(const forge::Graph& tape)
         : num_nodes_(tape.nodes.size()), vector_width_(4) {
         diff_inputs_ = tape.diff_inputs;
+        // Build hash set for O(1) lookup in getGradient()
+        diff_inputs_set_.insert(diff_inputs_.begin(), diff_inputs_.end());
         // Initialize identity mapping
         originalToOptimizedMapping_.resize(tape.nodes.size());
         for (size_t i = 0; i < tape.nodes.size(); ++i) {
@@ -62,13 +65,15 @@ public:
     }
 
     // Constructor with node ID mapping and explicit buffer size
-    AVX2NodeValueBuffer(const forge::Graph& tape, 
+    AVX2NodeValueBuffer(const forge::Graph& tape,
                         const std::vector<forge::NodeId>& originalToOptimizedMapping,
                         size_t requiredNodes)
         : vector_width_(4), originalToOptimizedMapping_(originalToOptimizedMapping), num_nodes_(requiredNodes) {
-        
+
         diff_inputs_ = tape.diff_inputs;
-        
+        // Build hash set for O(1) lookup in getGradient()
+        diff_inputs_set_.insert(diff_inputs_.begin(), diff_inputs_.end());
+
         // Use the exact size provided by the kernel
         std::cout << "[AVX2 BUFFER] Using exact size from kernel: " << num_nodes_ << std::endl;
 
@@ -147,8 +152,10 @@ public:
             // Buffer needs to accommodate all optimized node IDs (0 to maxOptimizedNodeId inclusive)
             num_nodes_ = maxOptimizedNodeId + 1;
         }
-        
+
         diff_inputs_ = tape.diff_inputs;
+        // Build hash set for O(1) lookup in getGradient()
+        diff_inputs_set_.insert(diff_inputs_.begin(), diff_inputs_.end());
 
         // Allocate values - 4 doubles per node for AVX2
         size_t totalDoubles = num_nodes_ * vector_width_;
@@ -291,12 +298,12 @@ public:
                 mappedNode = candidate;
             }
         }
-        
-        auto it = std::find(diff_inputs_.begin(), diff_inputs_.end(), mappedNode);
-        if (it == diff_inputs_.end()) {
+
+        // O(1) lookup using hash set instead of O(n) linear search
+        if (diff_inputs_set_.find(mappedNode) == diff_inputs_set_.end()) {
             throw std::runtime_error("Node was not marked for differentiation");
         }
-        
+
         // Return first lane of gradient
         return gradients_[mappedNode * vector_width_];
     }
@@ -331,13 +338,44 @@ public:
         if (!gradients_) {
             return {};
         }
-        
+
         std::vector<double> result;
         for (auto node : diff_inputs_) {
             // Return first lane for each gradient
             result.push_back(gradients_[node * vector_width_]);
         }
         return result;
+    }
+
+    // Fast batch gradient access - no validation, direct memory access
+    std::vector<double> getGradientsBatch(const std::vector<forge::NodeId>& nodes) const override {
+        std::vector<double> result;
+        if (!gradients_) {
+            return result;
+        }
+        result.resize(nodes.size());  // Resize once, no push_back
+        for (size_t i = 0; i < nodes.size(); ++i) {
+            // Map original node ID to optimized
+            forge::NodeId node = nodes[i];
+            forge::NodeId mappedNode = node;
+            if (node < originalToOptimizedMapping_.size()) {
+                auto candidate = originalToOptimizedMapping_[node];
+                if (candidate != static_cast<forge::NodeId>(UINT32_MAX)) {
+                    mappedNode = candidate;
+                }
+            }
+            // Direct array access - no validation
+            result[i] = gradients_[mappedNode * vector_width_];
+        }
+        return result;
+    }
+
+    // Ultra-fast: direct array read with pre-computed indices (no mapping, no allocation)
+    void getGradientsDirect(const std::vector<size_t>& bufferIndices, double* output) const override {
+        if (!gradients_) return;
+        for (size_t i = 0; i < bufferIndices.size(); ++i) {
+            output[i] = gradients_[bufferIndices[i]];
+        }
     }
     
     void clearGradients() override {
@@ -378,6 +416,7 @@ private:
     uint64_t num_nodes_;
     const int vector_width_;
     std::vector<forge::NodeId> diff_inputs_;
+    std::unordered_set<forge::NodeId> diff_inputs_set_;  // O(1) lookup for getGradient()
     std::vector<forge::NodeId> originalToOptimizedMapping_;
 };
 

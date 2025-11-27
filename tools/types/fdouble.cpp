@@ -2,6 +2,7 @@
 #include "fbool.hpp"
 #include <stdexcept>
 #include <cmath>
+#include <iostream>
 
 namespace forge {
 
@@ -64,18 +65,33 @@ ResultHandle fdouble::markOutput() {
     if (!GraphRecorder::isAnyRecording()) {
         throw std::runtime_error("Cannot mark output when not recording");
     }
-    
-    if (!isActive_) {
-        throw std::runtime_error("Cannot mark passive value as output");
-    }
-    
+
     auto* recorder = GraphRecorder::active();
     if (!recorder) {
         throw std::runtime_error("No active recorder");
     }
-    
-    recorder->graph().markOutput(activeNode_);
-    return ResultHandle(activeNode_);
+
+    // Warn if marking a passive value as output - this may indicate missing
+    // Forge wiring in the computation path.
+    if (!isActive_) {
+        static std::size_t warnCount = 0;
+        if (warnCount < 10) {
+            ++warnCount;
+            std::cerr << "[Forge][Warning] markOutput() called on passive value "
+                      << "(value=" << passiveValue_ << ") - gradients will be zero. "
+                      << "This may indicate incomplete Forge wiring. "
+                      << "(occurrence " << warnCount << ")\n";
+        }
+    }
+
+    // Ensure we have a node in the graph even for passive values. This allows
+    // outputs that are currently constant w.r.t. Forge inputs to be marked as
+    // outputs; gradients will be zero in that case. This is preferable to
+    // failing hard and is useful while incrementally wiring up Forge through
+    // larger code paths like QuantLib.
+    NodeId nodeId = ensureNode();
+    recorder->graph().markOutput(nodeId);
+    return ResultHandle(nodeId);
 }
 
 fdouble fdouble::binaryOp(const fdouble& a, const fdouble& b, OpCode op) {

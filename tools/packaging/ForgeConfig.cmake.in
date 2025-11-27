@@ -1,0 +1,20 @@
+@PACKAGE_INIT@
+
+# ForgeConfig.cmake - CMake configuration file for the Forge package
+
+# Provide path hints for finding the package
+set_and_check(Forge_INCLUDE_DIR "@PACKAGE_FORGE_INSTALL_INCLUDEDIR@")
+
+# Include the exported targets
+include("${CMAKE_CURRENT_LIST_DIR}/ForgeTargets.cmake")
+
+# Define the Forge::forge target (already defined in ForgeTargets.cmake)
+# This makes the target available to consumers
+
+check_required_components(Forge)
+
+# Provide some informational variables
+set(Forge_VERSION "@PROJECT_VERSION@")
+set(Forge_FOUND TRUE)
+
+message(STATUS "Found Forge version ${Forge_VERSION}")

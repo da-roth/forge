@@ -210,8 +210,8 @@ if(WIN32)
     set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS OFF)
 endif()
 
-# Add tests subdirectory if it exists
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/CMakeLists.txt")
+# Add tests subdirectory if it exists (can be disabled by parent project)
+if(NOT FORGE_SKIP_TESTS AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/CMakeLists.txt")
     # Enable testing
     include(FetchContent)
     FetchContent_Declare(
@@ -232,17 +232,12 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/CMakeLists.txt")
     FetchContent_MakeAvailable(googletest)
 
     add_subdirectory(tests)
-endif()
 
-# Add toolsTests subdirectory if it exists
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/toolsTests/CMakeLists.txt")
-    add_subdirectory(toolsTests)
-
-    # Copy sample graphs for optimization benchmark tests
-    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/toolsTests/sample_graphs")
-        file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/toolsTests/sample_graphs"
-             DESTINATION "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/")
+    # Add toolsTests subdirectory if it exists
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/toolsTests/CMakeLists.txt")
+        add_subdirectory(toolsTests)
     endif()
+
 endif()
 
 # Add examples subdirectory if it exists

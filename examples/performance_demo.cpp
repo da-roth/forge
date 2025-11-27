@@ -54,7 +54,8 @@ int main() {
     fdouble y2 = square(y);
     fdouble sqrt_term = sqrt(x2 + y2);
     fdouble product = x * y;
-    fdouble abs_product = abs(product);
+    // Use forge::abs explicitly to avoid ambiguity with std::abs(double)
+    fdouble abs_product = forge::abs(product);
     fdouble log_term = log(abs_product + 1.0);
     fdouble result = exp_term * sqrt_term + log_term;
 

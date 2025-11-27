@@ -235,7 +235,7 @@ public:
                       << "buffer=" << totalBufferBytes << " bytes for " << buffer.getNumNodes() << " nodes)" << std::endl;
             firstCall = false;
         }
-        std::cout << "[KERNEL] Executing kernel..." << std::endl;
+        /*std::cout << "[KERNEL] Executing kernel..." << std::endl;*/
 #endif
 
 #ifdef FORGE_RELEASE_BUILD
@@ -259,16 +259,16 @@ public:
             if (!outputNodes_.empty() && buffer.getNumNodes() > 0) {
                 forge::NodeId outputNode = outputNodes_[0];
                 double outputValue = values[outputNode * instructionSet_->getVectorWidth()];
-                std::cout << "[KERNEL] Execution completed in " << std::fixed << std::setprecision(3) << execTimeUs
+                /*std::cout << "[KERNEL] Execution completed in " << std::fixed << std::setprecision(3) << execTimeUs
                           << " μs. Output node " << outputNode << " value: "
-                          << std::fixed << std::setprecision(17) << outputValue << std::endl;
+                          << std::fixed << std::setprecision(17) << outputValue << std::endl;*/
             } else if (buffer.getNumNodes() > 0) {
                 // Fallback to last node if no output nodes specified
                 size_t lastNode = buffer.getNumNodes() - 1;
                 double outputValue = values[lastNode * instructionSet_->getVectorWidth()];
-                std::cout << "[KERNEL] Execution completed in " << std::fixed << std::setprecision(3) << execTimeUs
+                /*std::cout << "[KERNEL] Execution completed in " << std::fixed << std::setprecision(3) << execTimeUs
                           << " μs. Last node value: "
-                          << std::fixed << std::setprecision(17) << outputValue << std::endl;
+                          << std::fixed << std::setprecision(17) << outputValue << std::endl;*/
             }
 
             // Print runtime trace after forward pass if tracing is enabled

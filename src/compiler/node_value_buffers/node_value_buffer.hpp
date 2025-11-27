@@ -30,6 +30,11 @@ public:
     virtual double getGradient(forge::NodeId node) const = 0;
     virtual std::vector<double> getVectorGradient(forge::NodeId node) const = 0;
     virtual std::vector<double> getGradients() const = 0;
+    // Batch gradient access - returns gradients for specified nodes in order (fast, no validation)
+    virtual std::vector<double> getGradientsBatch(const std::vector<forge::NodeId>& nodes) const = 0;
+    // Ultra-fast: write gradients directly to output array using pre-computed buffer indices
+    // bufferIndices should contain the actual index into gradients_ array (already mapped and multiplied by vector_width)
+    virtual void getGradientsDirect(const std::vector<size_t>& bufferIndices, double* output) const = 0;
     virtual void clearGradients() = 0;
     virtual bool hasGradients() const = 0;
     
