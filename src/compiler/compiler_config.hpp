@@ -35,11 +35,11 @@ namespace forge {
  */
 struct CompilerConfig {
     // Optimization flags (matching GraphOptimizer::OptimizationConfig defaults)
-    bool enableOptimizations = true;        // Master switch for all optimizations
-    bool enableInactiveFolding = true;      // Fold constant subgraphs (isActive=false nodes)
-    bool enableCSE = true;                  // Common subexpression elimination
-    bool enableAlgebraicSimplification = true; // Apply algebraic identities (x*1=x, etc)
-    bool enableStabilityCleaning = true;    // Fix numerical stability issues (1/exp(x) -> exp(-x))
+    bool enableOptimizations = false;       // Master switch for all optimizations (default: off, only stability cleaning enabled)
+    bool enableInactiveFolding = false;     // Fold constant subgraphs (isActive=false nodes)
+    bool enableCSE = false;                 // Common subexpression elimination
+    bool enableAlgebraicSimplification = false; // Apply algebraic identities (x*1=x, etc)
+    bool enableStabilityCleaning = true;    // Fix numerical stability issues (1/exp(x) -> exp(-x)) - DEFAULT: enabled
     int maxOptimizationPasses = 5;          // Iterate until no changes or max passes
     
     // Debug output flags (all false by default in production)
@@ -112,9 +112,17 @@ struct CompilerConfig {
         }
     }
 
-    /** @brief Create default production configuration with optimizations enabled */
+    /** @brief Create default production configuration with only stability cleaning enabled */
     static CompilerConfig Default() {
-        return CompilerConfig{};
+        CompilerConfig config;
+        // Only enable stability cleaning by default (sanity cleaning)
+        config.enableStabilityCleaning = true;
+        // All other optimizations are disabled by default
+        config.enableOptimizations = false;
+        config.enableInactiveFolding = false;
+        config.enableCSE = false;
+        config.enableAlgebraicSimplification = false;
+        return config;
     }
 
     /** @brief Create debug configuration with full diagnostic output enabled */
@@ -145,6 +153,12 @@ struct CompilerConfig {
     /** @brief Create configuration with aggressive optimizations for performance */
     static CompilerConfig Fast() {
         CompilerConfig config;
+        // Enable all optimizations for maximum performance
+        config.enableOptimizations = true;
+        config.enableInactiveFolding = true;
+        config.enableCSE = true;
+        config.enableAlgebraicSimplification = true;
+        config.enableStabilityCleaning = true;
         // Already using all 16 registers by default
         config.maxOptimizationPasses = 10;  // More aggressive optimization
         return config;
