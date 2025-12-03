@@ -347,11 +347,9 @@ private:
         // Save RAX (used for function address)
         a.push(rax);
 
-        // Save callee-saved registers if needed (RDI, RSI on Windows)
-#ifdef _WIN32
+        // CRITICAL: Save RDI/RSI - kernel uses these as workspace pointers on Linux
         a.push(rdi);
         a.push(rsi);
-#endif
 
         // Allocate space for 2 YMM values: input, result
         // Each YMM = 32 bytes, total = 64 bytes
@@ -390,11 +388,9 @@ private:
         // Cleanup stack space (64 + 8 bytes)
         a.add(rsp, 64 + 8);
 
-        // Restore callee-saved registers
-#ifdef _WIN32
+        // Restore RDI/RSI workspace pointers
         a.pop(rsi);
         a.pop(rdi);
-#endif
 
         // Restore RAX
         a.pop(rax);
@@ -413,11 +409,9 @@ private:
         // Save RAX (used for function address)
         a.push(rax);
 
-        // Save callee-saved registers if needed (RDI, RSI on Windows)
-#ifdef _WIN32
+        // CRITICAL: Save RDI/RSI - kernel uses these as workspace pointers on Linux
         a.push(rdi);
         a.push(rsi);
-#endif
 
         // Allocate space for 3 YMM values: arg1 (base), arg2 (exp), result
         // Each YMM = 32 bytes, total = 96 bytes
@@ -461,11 +455,9 @@ private:
         // Cleanup stack space (96 + 8 bytes)
         a.add(rsp, 96 + 8);
 
-        // Restore callee-saved registers
-#ifdef _WIN32
+        // Restore RDI/RSI workspace pointers
         a.pop(rsi);
         a.pop(rdi);
-#endif
 
         // Restore RAX
         a.pop(rax);
