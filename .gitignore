@@ -11,6 +11,7 @@ cmake-build-*/
 *.suo
 *.sln
 *.workspace
+.idea/
 
 # Compiled files
 *.o
@@ -33,3 +34,4 @@ compile_commands.json
 # Documentation
 docs/html/
 docs/latex/
+docs/
