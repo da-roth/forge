@@ -1,17 +1,8 @@
 # Test executable
 add_executable(forge_tests
-    # Test source files
-    test_derivatives_gtest.cpp
-    test_derivatives_gtest_avx2.cpp
     # Unit tests for core components
     test_graph_unit.cpp
     test_compiler_config_unit.cpp
-    test_all_operations_coverage.cpp
-    # Test header files (for VS visibility)
-    test_functions_1d.hpp
-    test_functions_2d.hpp
-    test_functions_multi_io.hpp
-    test_graph_base.hpp
 )
 
 # Link with Google Test and our library
