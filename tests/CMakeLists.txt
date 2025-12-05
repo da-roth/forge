@@ -3,6 +3,7 @@ add_executable(forge_tests
     # Unit tests for core components
     test_graph_unit.cpp
     test_compiler_config_unit.cpp
+    test_forge_engine_unit.cpp
 )
 
 # Link with Google Test and our library
