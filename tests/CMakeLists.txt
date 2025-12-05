@@ -5,27 +5,11 @@ add_executable(forge_tests
     test_benchmarks_avx2.cpp
     test_derivatives_gtest.cpp
     test_derivatives_gtest_avx2.cpp
-    ../toolsTests/test_sanity_tool.cpp
-    ../toolsTests/test_sanity_tool_avx2.cpp
-    ../toolsTests/test_benchmark_tool.cpp
-    ../toolsTests/test_sanity_diff_tool.cpp
-    ../toolsTests/test_benchmark_diff_tool.cpp
-    ../toolsTests/test_sanity_multi_dim_tool.cpp
-    ../toolsTests/test_sanity_multi_dim_diff_tool.cpp
-    ../toolsTests/test_benchmark_multi_dim_diff_tool.cpp
     # Test header files (for VS visibility)
     test_functions_1d.hpp
     test_functions_2d.hpp
     test_functions_multi_io.hpp
     test_graph_base.hpp
-    # Tools headers (for VS visibility)
-    ../tools/sanityTool/sanity_checker.hpp
-    ../tools/benchmarkTool/benchmark_runner.hpp
-    ../tools/benchmarkTool/benchmark_diff_runner.hpp
-    ../tools/benchmarkTool/benchmark_multi_dim_diff_runner.hpp
-    ../tools/sanityTool/sanity_checker_diff.hpp
-    ../tools/sanityTool/sanity_multi_dim_checker.hpp
-    ../tools/sanityTool/sanity_multi_dim_checker_diff.hpp
 )
 
 # Link with Google Test and our library
