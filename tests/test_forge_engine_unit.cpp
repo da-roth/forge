@@ -1,231 +1,276 @@
 #include <gtest/gtest.h>
 #include <iostream>
+#include <sstream>
+#include <cmath>
 #include "../src/graph/graph.hpp"
 #include "../src/compiler/forge_engine.hpp"
 #include "../src/compiler/compiler_config.hpp"
 #include "../src/compiler/node_value_buffers/scalar_node_value_buffer.hpp"
 #include "../src/compiler/node_value_buffers/avx2_node_value_buffer.hpp"
+#include "test_graphs.hpp"
 
 using namespace forge;
+using namespace forge_tests;
+
+// Helper to compare doubles with tolerance
+static bool approxEqual(double a, double b, double tol = 1e-10) {
+    return std::abs(a - b) < tol;
+}
+
+// Helper to format a compact result summary for PASS output
+static std::string formatPassSummary(size_t numCases, bool withGradient) {
+    std::ostringstream oss;
+    oss << numCases << "/" << numCases << " results";
+    if (withGradient) {
+        oss << ", " << numCases << "/" << numCases << " gradients";
+    }
+    return oss.str();
+}
+
+// ============================================================================
+// Scalar tests (SSE2)
+// ============================================================================
 
 TEST(ForgeEngineTest, CompileAndExecuteSimpleGraph) {
-    // Build a simple graph: output = input + 1.0
-    Graph graph;
-    NodeId inputId = graph.addInput();
-    NodeId constId = graph.addConstant(1.0);
+    int passed = 0, failed = 0;
+    std::vector<std::string> failures;
 
-    Node addNode;
-    addNode.op = OpCode::Add;
-    addNode.a = inputId;
-    addNode.b = constId;
-    addNode.isActive = true;
-    NodeId addId = graph.addNode(addNode);
+    for (auto tg : createTestGraphs()) {
+        try {
+            ForgeEngine engine(CompilerConfig::Default());
+            auto kernel = engine.compile(tg.graph);
 
-    graph.markOutput(addId);
+            if (!kernel) {
+                std::cout << "  [FAIL] " << tg.name << ": kernel is null" << std::endl;
+                failures.push_back(tg.name + ": kernel is null");
+                failed++;
+                continue;
+            }
 
-    // Compile with default config
-    ForgeEngine engine(CompilerConfig::Default());
-    auto kernel = engine.compile(graph);
+            ScalarNodeValueBuffer buffer(tg.graph);
+            bool graphPassed = true;
 
-    ASSERT_NE(kernel, nullptr);
-    EXPECT_GT(kernel->getRequiredNodes(), 0);
+            for (const auto& tc : tg.testCases) {
+                buffer.setValue(tg.inputId, tc.input);
+                kernel->execute(buffer);
+                double result = buffer.getValue(tg.outputId);
 
-    // Create buffer and set input
-    ScalarNodeValueBuffer buffer(graph);
-    buffer.setValue(inputId, 5.0);
+                if (!approxEqual(result, tc.expectedOutput)) {
+                    std::cout << "  [FAIL] " << tg.name << ": input=" << tc.input
+                              << ", got=" << result << ", expected=" << tc.expectedOutput << std::endl;
+                    failures.push_back(tg.name + ": wrong result for input " + std::to_string(tc.input));
+                    graphPassed = false;
+                    break;
+                }
+            }
 
-    // Execute and check result: 5.0 + 1.0 = 6.0
-    kernel->execute(buffer);
-    std::cout << "  Input: 5.0, Result: " << buffer.getValue(addId) << ", Expected: 6.0" << std::endl;
-    EXPECT_DOUBLE_EQ(buffer.getValue(addId), 6.0);
+            if (graphPassed) {
+                std::cout << "  [PASS] " << tg.name << " | " << formatPassSummary(tg.testCases.size(), false) << std::endl;
+                passed++;
+            } else {
+                failed++;
+            }
+        } catch (const std::exception& e) {
+            std::cout << "  [CRASH] " << tg.name << ": " << e.what() << std::endl;
+            failures.push_back(tg.name + ": " + e.what());
+            failed++;
+        } catch (...) {
+            std::cout << "  [CRASH] " << tg.name << ": unknown exception" << std::endl;
+            failures.push_back(tg.name + ": unknown exception");
+            failed++;
+        }
+    }
 
-    // Re-execute with different inputs to verify kernel can be reused
-    buffer.setValue(inputId, 10.0);
-    kernel->execute(buffer);
-    std::cout << "  Input: 10.0, Result: " << buffer.getValue(addId) << ", Expected: 11.0" << std::endl;
-    EXPECT_DOUBLE_EQ(buffer.getValue(addId), 11.0);
-
-    buffer.setValue(inputId, -3.0);
-    kernel->execute(buffer);
-    std::cout << "  Input: -3.0, Result: " << buffer.getValue(addId) << ", Expected: -2.0" << std::endl;
-    EXPECT_DOUBLE_EQ(buffer.getValue(addId), -2.0);
-
-    buffer.setValue(inputId, 0.0);
-    kernel->execute(buffer);
-    std::cout << "  Input: 0.0, Result: " << buffer.getValue(addId) << ", Expected: 1.0" << std::endl;
-    EXPECT_DOUBLE_EQ(buffer.getValue(addId), 1.0);
+    std::cout << "\n  Summary: " << passed << " passed, " << failed << " failed" << std::endl;
+    EXPECT_EQ(failed, 0) << "Some graphs failed";
 }
 
 TEST(ForgeEngineTest, CompileAndExecuteWithGradient) {
-    // Build a simple graph: output = input + 1.0
-    // Derivative: d(output)/d(input) = 1.0 (constant, regardless of input value)
-    Graph graph;
-    NodeId inputId = graph.addInput();
-    NodeId constId = graph.addConstant(1.0);
+    int passed = 0, failed = 0;
+    std::vector<std::string> failures;
 
-    // Mark input for differentiation
-    graph.diff_inputs.push_back(inputId);
-    graph.nodes[inputId].needsGradient = true;
+    for (auto tg : createTestGraphsWithGradient()) {
+        try {
+            ForgeEngine engine(CompilerConfig::Default());
+            auto kernel = engine.compile(tg.graph);
 
-    Node addNode;
-    addNode.op = OpCode::Add;
-    addNode.a = inputId;
-    addNode.b = constId;
-    addNode.isActive = true;
-    addNode.needsGradient = true;
-    NodeId addId = graph.addNode(addNode);
+            if (!kernel) {
+                std::cout << "  [FAIL] " << tg.name << ": kernel is null" << std::endl;
+                failures.push_back(tg.name + ": kernel is null");
+                failed++;
+                continue;
+            }
 
-    graph.markOutput(addId);
+            ScalarNodeValueBuffer buffer(tg.graph);
+            bool graphPassed = true;
 
-    // Compile with default config
-    ForgeEngine engine(CompilerConfig::Default());
-    auto kernel = engine.compile(graph);
+            for (const auto& tc : tg.testCases) {
+                buffer.setValue(tg.inputId, tc.input);
+                buffer.clearGradients();
+                kernel->execute(buffer);
+                double result = buffer.getValue(tg.outputId);
+                double gradient = buffer.getGradient(tg.inputId);
 
-    ASSERT_NE(kernel, nullptr);
+                if (!approxEqual(result, tc.expectedOutput)) {
+                    std::cout << "  [FAIL] " << tg.name << ": input=" << tc.input
+                              << ", result got=" << result << ", expected=" << tc.expectedOutput << std::endl;
+                    failures.push_back(tg.name + ": wrong result for input " + std::to_string(tc.input));
+                    graphPassed = false;
+                    break;
+                }
+                if (!approxEqual(gradient, tc.expectedGradient)) {
+                    std::cout << "  [FAIL] " << tg.name << ": input=" << tc.input
+                              << ", gradient got=" << gradient << ", expected=" << tc.expectedGradient << std::endl;
+                    failures.push_back(tg.name + ": wrong gradient for input " + std::to_string(tc.input));
+                    graphPassed = false;
+                    break;
+                }
+            }
 
-    // Create buffer and set input
-    ScalarNodeValueBuffer buffer(graph);
-    buffer.setValue(inputId, 5.0);
+            if (graphPassed) {
+                std::cout << "  [PASS] " << tg.name << " | " << formatPassSummary(tg.testCases.size(), true) << std::endl;
+                passed++;
+            } else {
+                failed++;
+            }
+        } catch (const std::exception& e) {
+            std::cout << "  [CRASH] " << tg.name << ": " << e.what() << std::endl;
+            failures.push_back(tg.name + ": " + e.what());
+            failed++;
+        } catch (...) {
+            std::cout << "  [CRASH] " << tg.name << ": unknown exception" << std::endl;
+            failures.push_back(tg.name + ": unknown exception");
+            failed++;
+        }
+    }
 
-    // Execute and check result: 5.0 + 1.0 = 6.0
-    kernel->execute(buffer);
-    std::cout << "  Input: 5.0, Result: " << buffer.getValue(addId) << " (expected: 6.0), "
-              << "Gradient: " << buffer.getGradient(inputId) << " (expected: 1.0)" << std::endl;
-    EXPECT_DOUBLE_EQ(buffer.getValue(addId), 6.0);
-    EXPECT_DOUBLE_EQ(buffer.getGradient(inputId), 1.0);
-
-    // Re-execute with different input
-    buffer.setValue(inputId, 10.0);
-    buffer.clearGradients();
-    kernel->execute(buffer);
-    std::cout << "  Input: 10.0, Result: " << buffer.getValue(addId) << " (expected: 11.0), "
-              << "Gradient: " << buffer.getGradient(inputId) << " (expected: 1.0)" << std::endl;
-    EXPECT_DOUBLE_EQ(buffer.getValue(addId), 11.0);
-    EXPECT_DOUBLE_EQ(buffer.getGradient(inputId), 1.0);
-
-    // Re-execute with negative input
-    buffer.setValue(inputId, -7.5);
-    buffer.clearGradients();
-    kernel->execute(buffer);
-    std::cout << "  Input: -7.5, Result: " << buffer.getValue(addId) << " (expected: -6.5), "
-              << "Gradient: " << buffer.getGradient(inputId) << " (expected: 1.0)" << std::endl;
-    EXPECT_DOUBLE_EQ(buffer.getValue(addId), -6.5);
-    EXPECT_DOUBLE_EQ(buffer.getGradient(inputId), 1.0);
+    std::cout << "\n  Summary: " << passed << " passed, " << failed << " failed" << std::endl;
+    EXPECT_EQ(failed, 0) << "Some graphs failed";
 }
 
 // ============================================================================
-// AVX2 versions of the same tests
+// AVX2 tests
 // ============================================================================
 
 TEST(ForgeEngineTestAVX2, CompileAndExecuteSimpleGraph) {
-    // Build a simple graph: output = input + 1.0
-    Graph graph;
-    NodeId inputId = graph.addInput();
-    NodeId constId = graph.addConstant(1.0);
+    int passed = 0, failed = 0;
+    std::vector<std::string> failures;
 
-    Node addNode;
-    addNode.op = OpCode::Add;
-    addNode.a = inputId;
-    addNode.b = constId;
-    addNode.isActive = true;
-    NodeId addId = graph.addNode(addNode);
+    for (auto tg : createTestGraphs()) {
+        try {
+            CompilerConfig config = CompilerConfig::Default();
+            config.instructionSet = CompilerConfig::InstructionSet::AVX2_PACKED;
+            ForgeEngine engine(config);
+            auto kernel = engine.compile(tg.graph);
 
-    graph.markOutput(addId);
+            if (!kernel) {
+                std::cout << "  [FAIL] " << tg.name << ": kernel is null" << std::endl;
+                failures.push_back(tg.name + ": kernel is null");
+                failed++;
+                continue;
+            }
 
-    // Compile with AVX2 config
-    CompilerConfig config = CompilerConfig::Default();
-    config.instructionSet = CompilerConfig::InstructionSet::AVX2_PACKED;
-    ForgeEngine engine(config);
-    auto kernel = engine.compile(graph);
+            AVX2NodeValueBuffer buffer(tg.graph);
+            bool graphPassed = true;
 
-    ASSERT_NE(kernel, nullptr);
-    EXPECT_GT(kernel->getRequiredNodes(), 0);
-    EXPECT_EQ(kernel->getVectorWidth(), 4);
+            for (const auto& tc : tg.testCases) {
+                buffer.setValue(tg.inputId, tc.input);
+                kernel->execute(buffer);
+                double result = buffer.getValue(tg.outputId);
 
-    // Create AVX2 buffer and set input
-    AVX2NodeValueBuffer buffer(graph);
-    buffer.setValue(inputId, 5.0);
+                if (!approxEqual(result, tc.expectedOutput)) {
+                    std::cout << "  [FAIL] [AVX2] " << tg.name << ": input=" << tc.input
+                              << ", got=" << result << ", expected=" << tc.expectedOutput << std::endl;
+                    failures.push_back(tg.name + ": wrong result for input " + std::to_string(tc.input));
+                    graphPassed = false;
+                    break;
+                }
+            }
 
-    // Execute and check result: 5.0 + 1.0 = 6.0
-    kernel->execute(buffer);
-    std::cout << "  [AVX2] Input: 5.0, Result: " << buffer.getValue(addId) << ", Expected: 6.0" << std::endl;
-    EXPECT_DOUBLE_EQ(buffer.getValue(addId), 6.0);
+            if (graphPassed) {
+                std::cout << "  [PASS] [AVX2] " << tg.name << " | " << formatPassSummary(tg.testCases.size(), false) << std::endl;
+                passed++;
+            } else {
+                failed++;
+            }
+        } catch (const std::exception& e) {
+            std::cout << "  [CRASH] [AVX2] " << tg.name << ": " << e.what() << std::endl;
+            failures.push_back(tg.name + ": " + e.what());
+            failed++;
+        } catch (...) {
+            std::cout << "  [CRASH] [AVX2] " << tg.name << ": unknown exception" << std::endl;
+            failures.push_back(tg.name + ": unknown exception");
+            failed++;
+        }
+    }
 
-    // Re-execute with different inputs to verify kernel can be reused
-    buffer.setValue(inputId, 10.0);
-    kernel->execute(buffer);
-    std::cout << "  [AVX2] Input: 10.0, Result: " << buffer.getValue(addId) << ", Expected: 11.0" << std::endl;
-    EXPECT_DOUBLE_EQ(buffer.getValue(addId), 11.0);
-
-    buffer.setValue(inputId, -3.0);
-    kernel->execute(buffer);
-    std::cout << "  [AVX2] Input: -3.0, Result: " << buffer.getValue(addId) << ", Expected: -2.0" << std::endl;
-    EXPECT_DOUBLE_EQ(buffer.getValue(addId), -2.0);
-
-    buffer.setValue(inputId, 0.0);
-    kernel->execute(buffer);
-    std::cout << "  [AVX2] Input: 0.0, Result: " << buffer.getValue(addId) << ", Expected: 1.0" << std::endl;
-    EXPECT_DOUBLE_EQ(buffer.getValue(addId), 1.0);
+    std::cout << "\n  Summary: " << passed << " passed, " << failed << " failed" << std::endl;
+    EXPECT_EQ(failed, 0) << "Some graphs failed";
 }
 
 TEST(ForgeEngineTestAVX2, CompileAndExecuteWithGradient) {
-    // Build a simple graph: output = input + 1.0
-    // Derivative: d(output)/d(input) = 1.0 (constant, regardless of input value)
-    Graph graph;
-    NodeId inputId = graph.addInput();
-    NodeId constId = graph.addConstant(1.0);
+    int passed = 0, failed = 0;
+    std::vector<std::string> failures;
 
-    // Mark input for differentiation
-    graph.diff_inputs.push_back(inputId);
-    graph.nodes[inputId].needsGradient = true;
+    for (auto tg : createTestGraphsWithGradient()) {
+        try {
+            CompilerConfig config = CompilerConfig::Default();
+            config.instructionSet = CompilerConfig::InstructionSet::AVX2_PACKED;
+            ForgeEngine engine(config);
+            auto kernel = engine.compile(tg.graph);
 
-    Node addNode;
-    addNode.op = OpCode::Add;
-    addNode.a = inputId;
-    addNode.b = constId;
-    addNode.isActive = true;
-    addNode.needsGradient = true;
-    NodeId addId = graph.addNode(addNode);
+            if (!kernel) {
+                std::cout << "  [FAIL] " << tg.name << ": kernel is null" << std::endl;
+                failures.push_back(tg.name + ": kernel is null");
+                failed++;
+                continue;
+            }
 
-    graph.markOutput(addId);
+            AVX2NodeValueBuffer buffer(tg.graph);
+            bool graphPassed = true;
 
-    // Compile with AVX2 config
-    CompilerConfig config = CompilerConfig::Default();
-    config.instructionSet = CompilerConfig::InstructionSet::AVX2_PACKED;
-    ForgeEngine engine(config);
-    auto kernel = engine.compile(graph);
+            for (const auto& tc : tg.testCases) {
+                buffer.setValue(tg.inputId, tc.input);
+                buffer.clearGradients();
+                kernel->execute(buffer);
+                double result = buffer.getValue(tg.outputId);
+                double gradient = buffer.getGradient(tg.inputId);
 
-    ASSERT_NE(kernel, nullptr);
-    EXPECT_EQ(kernel->getVectorWidth(), 4);
+                if (!approxEqual(result, tc.expectedOutput)) {
+                    std::cout << "  [FAIL] [AVX2] " << tg.name << ": input=" << tc.input
+                              << ", result got=" << result << ", expected=" << tc.expectedOutput << std::endl;
+                    failures.push_back(tg.name + ": wrong result for input " + std::to_string(tc.input));
+                    graphPassed = false;
+                    break;
+                }
+                if (!approxEqual(gradient, tc.expectedGradient)) {
+                    std::cout << "  [FAIL] [AVX2] " << tg.name << ": input=" << tc.input
+                              << ", gradient got=" << gradient << ", expected=" << tc.expectedGradient << std::endl;
+                    failures.push_back(tg.name + ": wrong gradient for input " + std::to_string(tc.input));
+                    graphPassed = false;
+                    break;
+                }
+            }
 
-    // Create AVX2 buffer and set input
-    AVX2NodeValueBuffer buffer(graph);
-    buffer.setValue(inputId, 5.0);
+            if (graphPassed) {
+                std::cout << "  [PASS] [AVX2] " << tg.name << " | " << formatPassSummary(tg.testCases.size(), true) << std::endl;
+                passed++;
+            } else {
+                failed++;
+            }
+        } catch (const std::exception& e) {
+            std::cout << "  [CRASH] [AVX2] " << tg.name << ": " << e.what() << std::endl;
+            failures.push_back(tg.name + ": " + e.what());
+            failed++;
+        } catch (...) {
+            std::cout << "  [CRASH] [AVX2] " << tg.name << ": unknown exception" << std::endl;
+            failures.push_back(tg.name + ": unknown exception");
+            failed++;
+        }
+    }
 
-    // Execute and check result: 5.0 + 1.0 = 6.0
-    kernel->execute(buffer);
-    std::cout << "  [AVX2] Input: 5.0, Result: " << buffer.getValue(addId) << " (expected: 6.0), "
-              << "Gradient: " << buffer.getGradient(inputId) << " (expected: 1.0)" << std::endl;
-    EXPECT_DOUBLE_EQ(buffer.getValue(addId), 6.0);
-    EXPECT_DOUBLE_EQ(buffer.getGradient(inputId), 1.0);
-
-    // Re-execute with different input
-    buffer.setValue(inputId, 10.0);
-    buffer.clearGradients();
-    kernel->execute(buffer);
-    std::cout << "  [AVX2] Input: 10.0, Result: " << buffer.getValue(addId) << " (expected: 11.0), "
-              << "Gradient: " << buffer.getGradient(inputId) << " (expected: 1.0)" << std::endl;
-    EXPECT_DOUBLE_EQ(buffer.getValue(addId), 11.0);
-    EXPECT_DOUBLE_EQ(buffer.getGradient(inputId), 1.0);
-
-    // Re-execute with negative input
-    buffer.setValue(inputId, -7.5);
-    buffer.clearGradients();
-    kernel->execute(buffer);
-    std::cout << "  [AVX2] Input: -7.5, Result: " << buffer.getValue(addId) << " (expected: -6.5), "
-              << "Gradient: " << buffer.getGradient(inputId) << " (expected: 1.0)" << std::endl;
-    EXPECT_DOUBLE_EQ(buffer.getValue(addId), -6.5);
-    EXPECT_DOUBLE_EQ(buffer.getGradient(inputId), 1.0);
+    std::cout << "\n  Summary: " << passed << " passed, " << failed << " failed" << std::endl;
+    EXPECT_EQ(failed, 0) << "Some graphs failed";
 }
 
 // ============================================================================
@@ -233,108 +278,120 @@ TEST(ForgeEngineTestAVX2, CompileAndExecuteWithGradient) {
 // ============================================================================
 
 TEST(ForgeEngineTestOptimized, CompileAndExecuteSimpleGraph) {
-    // Build a simple graph: output = input + 1.0
-    Graph graph;
-    NodeId inputId = graph.addInput();
-    NodeId constId = graph.addConstant(1.0);
+    int passed = 0, failed = 0;
+    std::vector<std::string> failures;
 
-    Node addNode;
-    addNode.op = OpCode::Add;
-    addNode.a = inputId;
-    addNode.b = constId;
-    addNode.isActive = true;
-    NodeId addId = graph.addNode(addNode);
+    for (auto tg : createTestGraphs()) {
+        try {
+            ForgeEngine engine(CompilerConfig::Fast());
+            auto kernel = engine.compile(tg.graph);
 
-    graph.markOutput(addId);
+            if (!kernel) {
+                std::cout << "  [FAIL] " << tg.name << ": kernel is null" << std::endl;
+                failures.push_back(tg.name + ": kernel is null");
+                failed++;
+                continue;
+            }
 
-    // Compile with all optimizations enabled
-    ForgeEngine engine(CompilerConfig::Fast());
-    auto kernel = engine.compile(graph);
+            ScalarNodeValueBuffer buffer(tg.graph);
+            bool graphPassed = true;
 
-    ASSERT_NE(kernel, nullptr);
-    EXPECT_GT(kernel->getRequiredNodes(), 0);
+            for (const auto& tc : tg.testCases) {
+                buffer.setValue(tg.inputId, tc.input);
+                kernel->execute(buffer);
+                double result = buffer.getValue(tg.outputId);
 
-    // Create buffer and set input
-    ScalarNodeValueBuffer buffer(graph);
-    buffer.setValue(inputId, 5.0);
+                if (!approxEqual(result, tc.expectedOutput)) {
+                    std::cout << "  [FAIL] [Opt] " << tg.name << ": input=" << tc.input
+                              << ", got=" << result << ", expected=" << tc.expectedOutput << std::endl;
+                    failures.push_back(tg.name + ": wrong result for input " + std::to_string(tc.input));
+                    graphPassed = false;
+                    break;
+                }
+            }
 
-    // Execute and check result: 5.0 + 1.0 = 6.0
-    kernel->execute(buffer);
-    std::cout << "  [Optimized] Input: 5.0, Result: " << buffer.getValue(addId) << ", Expected: 6.0" << std::endl;
-    EXPECT_DOUBLE_EQ(buffer.getValue(addId), 6.0);
+            if (graphPassed) {
+                std::cout << "  [PASS] [Opt] " << tg.name << " | " << formatPassSummary(tg.testCases.size(), false) << std::endl;
+                passed++;
+            } else {
+                failed++;
+            }
+        } catch (const std::exception& e) {
+            std::cout << "  [CRASH] [Opt] " << tg.name << ": " << e.what() << std::endl;
+            failures.push_back(tg.name + ": " + e.what());
+            failed++;
+        } catch (...) {
+            std::cout << "  [CRASH] [Opt] " << tg.name << ": unknown exception" << std::endl;
+            failures.push_back(tg.name + ": unknown exception");
+            failed++;
+        }
+    }
 
-    // Re-execute with different inputs to verify kernel can be reused
-    buffer.setValue(inputId, 10.0);
-    kernel->execute(buffer);
-    std::cout << "  [Optimized] Input: 10.0, Result: " << buffer.getValue(addId) << ", Expected: 11.0" << std::endl;
-    EXPECT_DOUBLE_EQ(buffer.getValue(addId), 11.0);
-
-    buffer.setValue(inputId, -3.0);
-    kernel->execute(buffer);
-    std::cout << "  [Optimized] Input: -3.0, Result: " << buffer.getValue(addId) << ", Expected: -2.0" << std::endl;
-    EXPECT_DOUBLE_EQ(buffer.getValue(addId), -2.0);
-
-    buffer.setValue(inputId, 0.0);
-    kernel->execute(buffer);
-    std::cout << "  [Optimized] Input: 0.0, Result: " << buffer.getValue(addId) << ", Expected: 1.0" << std::endl;
-    EXPECT_DOUBLE_EQ(buffer.getValue(addId), 1.0);
+    std::cout << "\n  Summary: " << passed << " passed, " << failed << " failed" << std::endl;
+    EXPECT_EQ(failed, 0) << "Some graphs failed";
 }
 
 TEST(ForgeEngineTestOptimized, CompileAndExecuteWithGradient) {
-    // Build a simple graph: output = input + 1.0
-    // Derivative: d(output)/d(input) = 1.0 (constant, regardless of input value)
-    Graph graph;
-    NodeId inputId = graph.addInput();
-    NodeId constId = graph.addConstant(1.0);
+    int passed = 0, failed = 0;
+    std::vector<std::string> failures;
 
-    // Mark input for differentiation
-    graph.diff_inputs.push_back(inputId);
-    graph.nodes[inputId].needsGradient = true;
+    for (auto tg : createTestGraphsWithGradient()) {
+        try {
+            ForgeEngine engine(CompilerConfig::Fast());
+            auto kernel = engine.compile(tg.graph);
 
-    Node addNode;
-    addNode.op = OpCode::Add;
-    addNode.a = inputId;
-    addNode.b = constId;
-    addNode.isActive = true;
-    addNode.needsGradient = true;
-    NodeId addId = graph.addNode(addNode);
+            if (!kernel) {
+                std::cout << "  [FAIL] " << tg.name << ": kernel is null" << std::endl;
+                failures.push_back(tg.name + ": kernel is null");
+                failed++;
+                continue;
+            }
 
-    graph.markOutput(addId);
+            ScalarNodeValueBuffer buffer(tg.graph);
+            bool graphPassed = true;
 
-    // Compile with all optimizations enabled
-    ForgeEngine engine(CompilerConfig::Fast());
-    auto kernel = engine.compile(graph);
+            for (const auto& tc : tg.testCases) {
+                buffer.setValue(tg.inputId, tc.input);
+                buffer.clearGradients();
+                kernel->execute(buffer);
+                double result = buffer.getValue(tg.outputId);
+                double gradient = buffer.getGradient(tg.inputId);
 
-    ASSERT_NE(kernel, nullptr);
+                if (!approxEqual(result, tc.expectedOutput)) {
+                    std::cout << "  [FAIL] [Opt] " << tg.name << ": input=" << tc.input
+                              << ", result got=" << result << ", expected=" << tc.expectedOutput << std::endl;
+                    failures.push_back(tg.name + ": wrong result for input " + std::to_string(tc.input));
+                    graphPassed = false;
+                    break;
+                }
+                if (!approxEqual(gradient, tc.expectedGradient)) {
+                    std::cout << "  [FAIL] [Opt] " << tg.name << ": input=" << tc.input
+                              << ", gradient got=" << gradient << ", expected=" << tc.expectedGradient << std::endl;
+                    failures.push_back(tg.name + ": wrong gradient for input " + std::to_string(tc.input));
+                    graphPassed = false;
+                    break;
+                }
+            }
 
-    // Create buffer and set input
-    ScalarNodeValueBuffer buffer(graph);
-    buffer.setValue(inputId, 5.0);
+            if (graphPassed) {
+                std::cout << "  [PASS] [Opt] " << tg.name << " | " << formatPassSummary(tg.testCases.size(), true) << std::endl;
+                passed++;
+            } else {
+                failed++;
+            }
+        } catch (const std::exception& e) {
+            std::cout << "  [CRASH] [Opt] " << tg.name << ": " << e.what() << std::endl;
+            failures.push_back(tg.name + ": " + e.what());
+            failed++;
+        } catch (...) {
+            std::cout << "  [CRASH] [Opt] " << tg.name << ": unknown exception" << std::endl;
+            failures.push_back(tg.name + ": unknown exception");
+            failed++;
+        }
+    }
 
-    // Execute and check result: 5.0 + 1.0 = 6.0
-    kernel->execute(buffer);
-    std::cout << "  [Optimized] Input: 5.0, Result: " << buffer.getValue(addId) << " (expected: 6.0), "
-              << "Gradient: " << buffer.getGradient(inputId) << " (expected: 1.0)" << std::endl;
-    EXPECT_DOUBLE_EQ(buffer.getValue(addId), 6.0);
-    EXPECT_DOUBLE_EQ(buffer.getGradient(inputId), 1.0);
-
-    // Re-execute with different input
-    buffer.setValue(inputId, 10.0);
-    buffer.clearGradients();
-    kernel->execute(buffer);
-    std::cout << "  [Optimized] Input: 10.0, Result: " << buffer.getValue(addId) << " (expected: 11.0), "
-              << "Gradient: " << buffer.getGradient(inputId) << " (expected: 1.0)" << std::endl;
-    EXPECT_DOUBLE_EQ(buffer.getValue(addId), 11.0);
-    EXPECT_DOUBLE_EQ(buffer.getGradient(inputId), 1.0);
-
-    // Re-execute with negative input
-    buffer.setValue(inputId, -7.5);
-    buffer.clearGradients();
-    kernel->execute(buffer);
-    std::cout << "  [Optimized] Input: -7.5, Result: " << buffer.getValue(addId) << " (expected: -6.5), "
-              << "Gradient: " << buffer.getGradient(inputId) << " (expected: 1.0)" << std::endl;
-    EXPECT_DOUBLE_EQ(buffer.getValue(addId), -6.5);
-    EXPECT_DOUBLE_EQ(buffer.getGradient(inputId), 1.0);
+    std::cout << "\n  Summary: " << passed << " passed, " << failed << " failed" << std::endl;
+    EXPECT_EQ(failed, 0) << "Some graphs failed";
 }
 
 // ============================================================================
@@ -342,112 +399,122 @@ TEST(ForgeEngineTestOptimized, CompileAndExecuteWithGradient) {
 // ============================================================================
 
 TEST(ForgeEngineTestAVX2Optimized, CompileAndExecuteSimpleGraph) {
-    // Build a simple graph: output = input + 1.0
-    Graph graph;
-    NodeId inputId = graph.addInput();
-    NodeId constId = graph.addConstant(1.0);
+    int passed = 0, failed = 0;
+    std::vector<std::string> failures;
 
-    Node addNode;
-    addNode.op = OpCode::Add;
-    addNode.a = inputId;
-    addNode.b = constId;
-    addNode.isActive = true;
-    NodeId addId = graph.addNode(addNode);
+    for (auto tg : createTestGraphs()) {
+        try {
+            CompilerConfig config = CompilerConfig::Fast();
+            config.instructionSet = CompilerConfig::InstructionSet::AVX2_PACKED;
+            ForgeEngine engine(config);
+            auto kernel = engine.compile(tg.graph);
 
-    graph.markOutput(addId);
+            if (!kernel) {
+                std::cout << "  [FAIL] " << tg.name << ": kernel is null" << std::endl;
+                failures.push_back(tg.name + ": kernel is null");
+                failed++;
+                continue;
+            }
 
-    // Compile with all optimizations enabled + AVX2
-    CompilerConfig config = CompilerConfig::Fast();
-    config.instructionSet = CompilerConfig::InstructionSet::AVX2_PACKED;
-    ForgeEngine engine(config);
-    auto kernel = engine.compile(graph);
+            AVX2NodeValueBuffer buffer(tg.graph);
+            bool graphPassed = true;
 
-    ASSERT_NE(kernel, nullptr);
-    EXPECT_GT(kernel->getRequiredNodes(), 0);
-    EXPECT_EQ(kernel->getVectorWidth(), 4);
+            for (const auto& tc : tg.testCases) {
+                buffer.setValue(tg.inputId, tc.input);
+                kernel->execute(buffer);
+                double result = buffer.getValue(tg.outputId);
 
-    // Create AVX2 buffer and set input
-    AVX2NodeValueBuffer buffer(graph);
-    buffer.setValue(inputId, 5.0);
+                if (!approxEqual(result, tc.expectedOutput)) {
+                    std::cout << "  [FAIL] [AVX2+Opt] " << tg.name << ": input=" << tc.input
+                              << ", got=" << result << ", expected=" << tc.expectedOutput << std::endl;
+                    failures.push_back(tg.name + ": wrong result for input " + std::to_string(tc.input));
+                    graphPassed = false;
+                    break;
+                }
+            }
 
-    // Execute and check result: 5.0 + 1.0 = 6.0
-    kernel->execute(buffer);
-    std::cout << "  [AVX2+Optimized] Input: 5.0, Result: " << buffer.getValue(addId) << ", Expected: 6.0" << std::endl;
-    EXPECT_DOUBLE_EQ(buffer.getValue(addId), 6.0);
+            if (graphPassed) {
+                std::cout << "  [PASS] [AVX2+Opt] " << tg.name << " | " << formatPassSummary(tg.testCases.size(), false) << std::endl;
+                passed++;
+            } else {
+                failed++;
+            }
+        } catch (const std::exception& e) {
+            std::cout << "  [CRASH] [AVX2+Opt] " << tg.name << ": " << e.what() << std::endl;
+            failures.push_back(tg.name + ": " + e.what());
+            failed++;
+        } catch (...) {
+            std::cout << "  [CRASH] [AVX2+Opt] " << tg.name << ": unknown exception" << std::endl;
+            failures.push_back(tg.name + ": unknown exception");
+            failed++;
+        }
+    }
 
-    // Re-execute with different inputs to verify kernel can be reused
-    buffer.setValue(inputId, 10.0);
-    kernel->execute(buffer);
-    std::cout << "  [AVX2+Optimized] Input: 10.0, Result: " << buffer.getValue(addId) << ", Expected: 11.0" << std::endl;
-    EXPECT_DOUBLE_EQ(buffer.getValue(addId), 11.0);
-
-    buffer.setValue(inputId, -3.0);
-    kernel->execute(buffer);
-    std::cout << "  [AVX2+Optimized] Input: -3.0, Result: " << buffer.getValue(addId) << ", Expected: -2.0" << std::endl;
-    EXPECT_DOUBLE_EQ(buffer.getValue(addId), -2.0);
-
-    buffer.setValue(inputId, 0.0);
-    kernel->execute(buffer);
-    std::cout << "  [AVX2+Optimized] Input: 0.0, Result: " << buffer.getValue(addId) << ", Expected: 1.0" << std::endl;
-    EXPECT_DOUBLE_EQ(buffer.getValue(addId), 1.0);
+    std::cout << "\n  Summary: " << passed << " passed, " << failed << " failed" << std::endl;
+    EXPECT_EQ(failed, 0) << "Some graphs failed";
 }
 
 TEST(ForgeEngineTestAVX2Optimized, CompileAndExecuteWithGradient) {
-    // Build a simple graph: output = input + 1.0
-    // Derivative: d(output)/d(input) = 1.0 (constant, regardless of input value)
-    Graph graph;
-    NodeId inputId = graph.addInput();
-    NodeId constId = graph.addConstant(1.0);
+    int passed = 0, failed = 0;
+    std::vector<std::string> failures;
 
-    // Mark input for differentiation
-    graph.diff_inputs.push_back(inputId);
-    graph.nodes[inputId].needsGradient = true;
+    for (auto tg : createTestGraphsWithGradient()) {
+        try {
+            CompilerConfig config = CompilerConfig::Fast();
+            config.instructionSet = CompilerConfig::InstructionSet::AVX2_PACKED;
+            ForgeEngine engine(config);
+            auto kernel = engine.compile(tg.graph);
 
-    Node addNode;
-    addNode.op = OpCode::Add;
-    addNode.a = inputId;
-    addNode.b = constId;
-    addNode.isActive = true;
-    addNode.needsGradient = true;
-    NodeId addId = graph.addNode(addNode);
+            if (!kernel) {
+                std::cout << "  [FAIL] " << tg.name << ": kernel is null" << std::endl;
+                failures.push_back(tg.name + ": kernel is null");
+                failed++;
+                continue;
+            }
 
-    graph.markOutput(addId);
+            AVX2NodeValueBuffer buffer(tg.graph);
+            bool graphPassed = true;
 
-    // Compile with all optimizations enabled + AVX2
-    CompilerConfig config = CompilerConfig::Fast();
-    config.instructionSet = CompilerConfig::InstructionSet::AVX2_PACKED;
-    ForgeEngine engine(config);
-    auto kernel = engine.compile(graph);
+            for (const auto& tc : tg.testCases) {
+                buffer.setValue(tg.inputId, tc.input);
+                buffer.clearGradients();
+                kernel->execute(buffer);
+                double result = buffer.getValue(tg.outputId);
+                double gradient = buffer.getGradient(tg.inputId);
 
-    ASSERT_NE(kernel, nullptr);
-    EXPECT_EQ(kernel->getVectorWidth(), 4);
+                if (!approxEqual(result, tc.expectedOutput)) {
+                    std::cout << "  [FAIL] [AVX2+Opt] " << tg.name << ": input=" << tc.input
+                              << ", result got=" << result << ", expected=" << tc.expectedOutput << std::endl;
+                    failures.push_back(tg.name + ": wrong result for input " + std::to_string(tc.input));
+                    graphPassed = false;
+                    break;
+                }
+                if (!approxEqual(gradient, tc.expectedGradient)) {
+                    std::cout << "  [FAIL] [AVX2+Opt] " << tg.name << ": input=" << tc.input
+                              << ", gradient got=" << gradient << ", expected=" << tc.expectedGradient << std::endl;
+                    failures.push_back(tg.name + ": wrong gradient for input " + std::to_string(tc.input));
+                    graphPassed = false;
+                    break;
+                }
+            }
 
-    // Create AVX2 buffer and set input
-    AVX2NodeValueBuffer buffer(graph);
-    buffer.setValue(inputId, 5.0);
+            if (graphPassed) {
+                std::cout << "  [PASS] [AVX2+Opt] " << tg.name << " | " << formatPassSummary(tg.testCases.size(), true) << std::endl;
+                passed++;
+            } else {
+                failed++;
+            }
+        } catch (const std::exception& e) {
+            std::cout << "  [CRASH] [AVX2+Opt] " << tg.name << ": " << e.what() << std::endl;
+            failures.push_back(tg.name + ": " + e.what());
+            failed++;
+        } catch (...) {
+            std::cout << "  [CRASH] [AVX2+Opt] " << tg.name << ": unknown exception" << std::endl;
+            failures.push_back(tg.name + ": unknown exception");
+            failed++;
+        }
+    }
 
-    // Execute and check result: 5.0 + 1.0 = 6.0
-    kernel->execute(buffer);
-    std::cout << "  [AVX2+Optimized] Input: 5.0, Result: " << buffer.getValue(addId) << " (expected: 6.0), "
-              << "Gradient: " << buffer.getGradient(inputId) << " (expected: 1.0)" << std::endl;
-    EXPECT_DOUBLE_EQ(buffer.getValue(addId), 6.0);
-    EXPECT_DOUBLE_EQ(buffer.getGradient(inputId), 1.0);
-
-    // Re-execute with different input
-    buffer.setValue(inputId, 10.0);
-    buffer.clearGradients();
-    kernel->execute(buffer);
-    std::cout << "  [AVX2+Optimized] Input: 10.0, Result: " << buffer.getValue(addId) << " (expected: 11.0), "
-              << "Gradient: " << buffer.getGradient(inputId) << " (expected: 1.0)" << std::endl;
-    EXPECT_DOUBLE_EQ(buffer.getValue(addId), 11.0);
-    EXPECT_DOUBLE_EQ(buffer.getGradient(inputId), 1.0);
-
-    // Re-execute with negative input
-    buffer.setValue(inputId, -7.5);
-    buffer.clearGradients();
-    kernel->execute(buffer);
-    std::cout << "  [AVX2+Optimized] Input: -7.5, Result: " << buffer.getValue(addId) << " (expected: -6.5), "
-              << "Gradient: " << buffer.getGradient(inputId) << " (expected: 1.0)" << std::endl;
-    EXPECT_DOUBLE_EQ(buffer.getValue(addId), -6.5);
-    EXPECT_DOUBLE_EQ(buffer.getGradient(inputId), 1.0);
+    std::cout << "\n  Summary: " << passed << " passed, " << failed << " failed" << std::endl;
+    EXPECT_EQ(failed, 0) << "Some graphs failed";
 }
