@@ -1,8 +1,6 @@
 # Test executable
 add_executable(forge_tests
     # Test source files
-    test_benchmarks.cpp
-    test_benchmarks_avx2.cpp
     test_derivatives_gtest.cpp
     test_derivatives_gtest_avx2.cpp
     # Test header files (for VS visibility)
