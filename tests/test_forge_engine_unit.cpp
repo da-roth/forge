@@ -28,6 +28,18 @@ static std::string formatPassSummary(size_t numInputs, size_t numOutputs, size_t
     return oss.str();
 }
 
+// Helper to format inputs vector as string
+static std::string formatInputs(const std::vector<double>& inputs) {
+    std::ostringstream oss;
+    oss << "(";
+    for (size_t i = 0; i < inputs.size(); ++i) {
+        if (i > 0) oss << ", ";
+        oss << inputs[i];
+    }
+    oss << ")";
+    return oss.str();
+}
+
 // ============================================================================
 // Scalar tests (SSE2)
 // ============================================================================
@@ -52,14 +64,17 @@ TEST(ForgeEngineTest, CompileAndExecuteSimpleGraph) {
             bool graphPassed = true;
 
             for (const auto& tc : tg.testCases) {
-                buffer.setValue(tg.inputId, tc.input);
+                // Set all input values
+                for (size_t i = 0; i < tg.inputIds.size(); ++i) {
+                    buffer.setValue(tg.inputIds[i], tc.inputs[i]);
+                }
                 kernel->execute(buffer);
                 double result = buffer.getValue(tg.outputId);
 
                 if (!approxEqual(result, tc.expectedOutput)) {
-                    std::cout << "  [FAIL] " << tg.name << ": input=" << tc.input
+                    std::cout << "  [FAIL] " << tg.name << ": inputs=" << formatInputs(tc.inputs)
                               << ", got=" << result << ", expected=" << tc.expectedOutput << std::endl;
-                    failures.push_back(tg.name + ": wrong result for input " + std::to_string(tc.input));
+                    failures.push_back(tg.name + ": wrong result for inputs " + formatInputs(tc.inputs));
                     graphPassed = false;
                     break;
                 }
@@ -106,23 +121,26 @@ TEST(ForgeEngineTest, CompileAndExecuteWithGradient) {
             bool graphPassed = true;
 
             for (const auto& tc : tg.testCases) {
-                buffer.setValue(tg.inputId, tc.input);
+                // Set all input values
+                for (size_t i = 0; i < tg.inputIds.size(); ++i) {
+                    buffer.setValue(tg.inputIds[i], tc.inputs[i]);
+                }
                 buffer.clearGradients();
                 kernel->execute(buffer);
                 double result = buffer.getValue(tg.outputId);
-                double gradient = buffer.getGradient(tg.inputId);
+                double gradient = buffer.getGradient(tg.inputIds[0]); // Gradient w.r.t. first input (x)
 
                 if (!approxEqual(result, tc.expectedOutput)) {
-                    std::cout << "  [FAIL] " << tg.name << ": input=" << tc.input
+                    std::cout << "  [FAIL] " << tg.name << ": inputs=" << formatInputs(tc.inputs)
                               << ", result got=" << result << ", expected=" << tc.expectedOutput << std::endl;
-                    failures.push_back(tg.name + ": wrong result for input " + std::to_string(tc.input));
+                    failures.push_back(tg.name + ": wrong result for inputs " + formatInputs(tc.inputs));
                     graphPassed = false;
                     break;
                 }
                 if (!approxEqual(gradient, tc.expectedGradient)) {
-                    std::cout << "  [FAIL] " << tg.name << ": input=" << tc.input
+                    std::cout << "  [FAIL] " << tg.name << ": inputs=" << formatInputs(tc.inputs)
                               << ", gradient got=" << gradient << ", expected=" << tc.expectedGradient << std::endl;
-                    failures.push_back(tg.name + ": wrong gradient for input " + std::to_string(tc.input));
+                    failures.push_back(tg.name + ": wrong gradient for inputs " + formatInputs(tc.inputs));
                     graphPassed = false;
                     break;
                 }
@@ -175,14 +193,17 @@ TEST(ForgeEngineTestAVX2, CompileAndExecuteSimpleGraph) {
             bool graphPassed = true;
 
             for (const auto& tc : tg.testCases) {
-                buffer.setValue(tg.inputId, tc.input);
+                // Set all input values
+                for (size_t i = 0; i < tg.inputIds.size(); ++i) {
+                    buffer.setValue(tg.inputIds[i], tc.inputs[i]);
+                }
                 kernel->execute(buffer);
                 double result = buffer.getValue(tg.outputId);
 
                 if (!approxEqual(result, tc.expectedOutput)) {
-                    std::cout << "  [FAIL] [AVX2] " << tg.name << ": input=" << tc.input
+                    std::cout << "  [FAIL] [AVX2] " << tg.name << ": inputs=" << formatInputs(tc.inputs)
                               << ", got=" << result << ", expected=" << tc.expectedOutput << std::endl;
-                    failures.push_back(tg.name + ": wrong result for input " + std::to_string(tc.input));
+                    failures.push_back(tg.name + ": wrong result for inputs " + formatInputs(tc.inputs));
                     graphPassed = false;
                     break;
                 }
@@ -231,23 +252,26 @@ TEST(ForgeEngineTestAVX2, CompileAndExecuteWithGradient) {
             bool graphPassed = true;
 
             for (const auto& tc : tg.testCases) {
-                buffer.setValue(tg.inputId, tc.input);
+                // Set all input values
+                for (size_t i = 0; i < tg.inputIds.size(); ++i) {
+                    buffer.setValue(tg.inputIds[i], tc.inputs[i]);
+                }
                 buffer.clearGradients();
                 kernel->execute(buffer);
                 double result = buffer.getValue(tg.outputId);
-                double gradient = buffer.getGradient(tg.inputId);
+                double gradient = buffer.getGradient(tg.inputIds[0]); // Gradient w.r.t. first input (x)
 
                 if (!approxEqual(result, tc.expectedOutput)) {
-                    std::cout << "  [FAIL] [AVX2] " << tg.name << ": input=" << tc.input
+                    std::cout << "  [FAIL] [AVX2] " << tg.name << ": inputs=" << formatInputs(tc.inputs)
                               << ", result got=" << result << ", expected=" << tc.expectedOutput << std::endl;
-                    failures.push_back(tg.name + ": wrong result for input " + std::to_string(tc.input));
+                    failures.push_back(tg.name + ": wrong result for inputs " + formatInputs(tc.inputs));
                     graphPassed = false;
                     break;
                 }
                 if (!approxEqual(gradient, tc.expectedGradient)) {
-                    std::cout << "  [FAIL] [AVX2] " << tg.name << ": input=" << tc.input
+                    std::cout << "  [FAIL] [AVX2] " << tg.name << ": inputs=" << formatInputs(tc.inputs)
                               << ", gradient got=" << gradient << ", expected=" << tc.expectedGradient << std::endl;
-                    failures.push_back(tg.name + ": wrong gradient for input " + std::to_string(tc.input));
+                    failures.push_back(tg.name + ": wrong gradient for inputs " + formatInputs(tc.inputs));
                     graphPassed = false;
                     break;
                 }
@@ -298,14 +322,17 @@ TEST(ForgeEngineTestOptimized, CompileAndExecuteSimpleGraph) {
             bool graphPassed = true;
 
             for (const auto& tc : tg.testCases) {
-                buffer.setValue(tg.inputId, tc.input);
+                // Set all input values
+                for (size_t i = 0; i < tg.inputIds.size(); ++i) {
+                    buffer.setValue(tg.inputIds[i], tc.inputs[i]);
+                }
                 kernel->execute(buffer);
                 double result = buffer.getValue(tg.outputId);
 
                 if (!approxEqual(result, tc.expectedOutput)) {
-                    std::cout << "  [FAIL] [Opt] " << tg.name << ": input=" << tc.input
+                    std::cout << "  [FAIL] [Opt] " << tg.name << ": inputs=" << formatInputs(tc.inputs)
                               << ", got=" << result << ", expected=" << tc.expectedOutput << std::endl;
-                    failures.push_back(tg.name + ": wrong result for input " + std::to_string(tc.input));
+                    failures.push_back(tg.name + ": wrong result for inputs " + formatInputs(tc.inputs));
                     graphPassed = false;
                     break;
                 }
@@ -352,23 +379,26 @@ TEST(ForgeEngineTestOptimized, CompileAndExecuteWithGradient) {
             bool graphPassed = true;
 
             for (const auto& tc : tg.testCases) {
-                buffer.setValue(tg.inputId, tc.input);
+                // Set all input values
+                for (size_t i = 0; i < tg.inputIds.size(); ++i) {
+                    buffer.setValue(tg.inputIds[i], tc.inputs[i]);
+                }
                 buffer.clearGradients();
                 kernel->execute(buffer);
                 double result = buffer.getValue(tg.outputId);
-                double gradient = buffer.getGradient(tg.inputId);
+                double gradient = buffer.getGradient(tg.inputIds[0]); // Gradient w.r.t. first input (x)
 
                 if (!approxEqual(result, tc.expectedOutput)) {
-                    std::cout << "  [FAIL] [Opt] " << tg.name << ": input=" << tc.input
+                    std::cout << "  [FAIL] [Opt] " << tg.name << ": inputs=" << formatInputs(tc.inputs)
                               << ", result got=" << result << ", expected=" << tc.expectedOutput << std::endl;
-                    failures.push_back(tg.name + ": wrong result for input " + std::to_string(tc.input));
+                    failures.push_back(tg.name + ": wrong result for inputs " + formatInputs(tc.inputs));
                     graphPassed = false;
                     break;
                 }
                 if (!approxEqual(gradient, tc.expectedGradient)) {
-                    std::cout << "  [FAIL] [Opt] " << tg.name << ": input=" << tc.input
+                    std::cout << "  [FAIL] [Opt] " << tg.name << ": inputs=" << formatInputs(tc.inputs)
                               << ", gradient got=" << gradient << ", expected=" << tc.expectedGradient << std::endl;
-                    failures.push_back(tg.name + ": wrong gradient for input " + std::to_string(tc.input));
+                    failures.push_back(tg.name + ": wrong gradient for inputs " + formatInputs(tc.inputs));
                     graphPassed = false;
                     break;
                 }
@@ -421,14 +451,17 @@ TEST(ForgeEngineTestAVX2Optimized, CompileAndExecuteSimpleGraph) {
             bool graphPassed = true;
 
             for (const auto& tc : tg.testCases) {
-                buffer.setValue(tg.inputId, tc.input);
+                // Set all input values
+                for (size_t i = 0; i < tg.inputIds.size(); ++i) {
+                    buffer.setValue(tg.inputIds[i], tc.inputs[i]);
+                }
                 kernel->execute(buffer);
                 double result = buffer.getValue(tg.outputId);
 
                 if (!approxEqual(result, tc.expectedOutput)) {
-                    std::cout << "  [FAIL] [AVX2+Opt] " << tg.name << ": input=" << tc.input
+                    std::cout << "  [FAIL] [AVX2+Opt] " << tg.name << ": inputs=" << formatInputs(tc.inputs)
                               << ", got=" << result << ", expected=" << tc.expectedOutput << std::endl;
-                    failures.push_back(tg.name + ": wrong result for input " + std::to_string(tc.input));
+                    failures.push_back(tg.name + ": wrong result for inputs " + formatInputs(tc.inputs));
                     graphPassed = false;
                     break;
                 }
@@ -477,23 +510,26 @@ TEST(ForgeEngineTestAVX2Optimized, CompileAndExecuteWithGradient) {
             bool graphPassed = true;
 
             for (const auto& tc : tg.testCases) {
-                buffer.setValue(tg.inputId, tc.input);
+                // Set all input values
+                for (size_t i = 0; i < tg.inputIds.size(); ++i) {
+                    buffer.setValue(tg.inputIds[i], tc.inputs[i]);
+                }
                 buffer.clearGradients();
                 kernel->execute(buffer);
                 double result = buffer.getValue(tg.outputId);
-                double gradient = buffer.getGradient(tg.inputId);
+                double gradient = buffer.getGradient(tg.inputIds[0]); // Gradient w.r.t. first input (x)
 
                 if (!approxEqual(result, tc.expectedOutput)) {
-                    std::cout << "  [FAIL] [AVX2+Opt] " << tg.name << ": input=" << tc.input
+                    std::cout << "  [FAIL] [AVX2+Opt] " << tg.name << ": inputs=" << formatInputs(tc.inputs)
                               << ", result got=" << result << ", expected=" << tc.expectedOutput << std::endl;
-                    failures.push_back(tg.name + ": wrong result for input " + std::to_string(tc.input));
+                    failures.push_back(tg.name + ": wrong result for inputs " + formatInputs(tc.inputs));
                     graphPassed = false;
                     break;
                 }
                 if (!approxEqual(gradient, tc.expectedGradient)) {
-                    std::cout << "  [FAIL] [AVX2+Opt] " << tg.name << ": input=" << tc.input
+                    std::cout << "  [FAIL] [AVX2+Opt] " << tg.name << ": inputs=" << formatInputs(tc.inputs)
                               << ", gradient got=" << gradient << ", expected=" << tc.expectedGradient << std::endl;
-                    failures.push_back(tg.name + ": wrong gradient for input " + std::to_string(tc.input));
+                    failures.push_back(tg.name + ": wrong gradient for inputs " + formatInputs(tc.inputs));
                     graphPassed = false;
                     break;
                 }
