@@ -19,7 +19,9 @@ struct TestGraph {
     forge::NodeId inputId;
     forge::NodeId outputId;
     bool hasGradient;
-    std::vector<TestCase> testCases;
+    size_t numInputs = 1;   // Number of graph inputs (marked as input)
+    size_t numOutputs = 1;  // Number of graph outputs (marked as output)
+    std::vector<TestCase> testCases;  // Each test case is one "input set" for re-evaluation
 };
 
 // Factory function to create test graphs without gradients

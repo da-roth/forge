@@ -18,11 +18,12 @@ static bool approxEqual(double a, double b, double tol = 1e-10) {
 }
 
 // Helper to format a compact result summary for PASS output
-static std::string formatPassSummary(size_t numCases, bool withGradient) {
+static std::string formatPassSummary(size_t numInputs, size_t numOutputs, size_t numInputSets, bool withGradient) {
     std::ostringstream oss;
-    oss << numCases << "/" << numCases << " results";
+    oss << numInputs << " inputs, " << numOutputs << " outputs, " << numInputSets << " input sets | ";
+    oss << numInputSets << "/" << numInputSets << " results";
     if (withGradient) {
-        oss << ", " << numCases << "/" << numCases << " gradients";
+        oss << ", " << numInputSets << "/" << numInputSets << " gradients";
     }
     return oss.str();
 }
@@ -65,7 +66,7 @@ TEST(ForgeEngineTest, CompileAndExecuteSimpleGraph) {
             }
 
             if (graphPassed) {
-                std::cout << "  [PASS] " << tg.name << " | " << formatPassSummary(tg.testCases.size(), false) << std::endl;
+                std::cout << "  [PASS] " << tg.name << " | " << formatPassSummary(tg.numInputs, tg.numOutputs, tg.testCases.size(), false) << std::endl;
                 passed++;
             } else {
                 failed++;
@@ -128,7 +129,7 @@ TEST(ForgeEngineTest, CompileAndExecuteWithGradient) {
             }
 
             if (graphPassed) {
-                std::cout << "  [PASS] " << tg.name << " | " << formatPassSummary(tg.testCases.size(), true) << std::endl;
+                std::cout << "  [PASS] " << tg.name << " | " << formatPassSummary(tg.numInputs, tg.numOutputs, tg.testCases.size(), true) << std::endl;
                 passed++;
             } else {
                 failed++;
@@ -188,7 +189,7 @@ TEST(ForgeEngineTestAVX2, CompileAndExecuteSimpleGraph) {
             }
 
             if (graphPassed) {
-                std::cout << "  [PASS] [AVX2] " << tg.name << " | " << formatPassSummary(tg.testCases.size(), false) << std::endl;
+                std::cout << "  [PASS] [AVX2] " << tg.name << " | " << formatPassSummary(tg.numInputs, tg.numOutputs, tg.testCases.size(), false) << std::endl;
                 passed++;
             } else {
                 failed++;
@@ -253,7 +254,7 @@ TEST(ForgeEngineTestAVX2, CompileAndExecuteWithGradient) {
             }
 
             if (graphPassed) {
-                std::cout << "  [PASS] [AVX2] " << tg.name << " | " << formatPassSummary(tg.testCases.size(), true) << std::endl;
+                std::cout << "  [PASS] [AVX2] " << tg.name << " | " << formatPassSummary(tg.numInputs, tg.numOutputs, tg.testCases.size(), true) << std::endl;
                 passed++;
             } else {
                 failed++;
@@ -311,7 +312,7 @@ TEST(ForgeEngineTestOptimized, CompileAndExecuteSimpleGraph) {
             }
 
             if (graphPassed) {
-                std::cout << "  [PASS] [Opt] " << tg.name << " | " << formatPassSummary(tg.testCases.size(), false) << std::endl;
+                std::cout << "  [PASS] [Opt] " << tg.name << " | " << formatPassSummary(tg.numInputs, tg.numOutputs, tg.testCases.size(), false) << std::endl;
                 passed++;
             } else {
                 failed++;
@@ -374,7 +375,7 @@ TEST(ForgeEngineTestOptimized, CompileAndExecuteWithGradient) {
             }
 
             if (graphPassed) {
-                std::cout << "  [PASS] [Opt] " << tg.name << " | " << formatPassSummary(tg.testCases.size(), true) << std::endl;
+                std::cout << "  [PASS] [Opt] " << tg.name << " | " << formatPassSummary(tg.numInputs, tg.numOutputs, tg.testCases.size(), true) << std::endl;
                 passed++;
             } else {
                 failed++;
@@ -434,7 +435,7 @@ TEST(ForgeEngineTestAVX2Optimized, CompileAndExecuteSimpleGraph) {
             }
 
             if (graphPassed) {
-                std::cout << "  [PASS] [AVX2+Opt] " << tg.name << " | " << formatPassSummary(tg.testCases.size(), false) << std::endl;
+                std::cout << "  [PASS] [AVX2+Opt] " << tg.name << " | " << formatPassSummary(tg.numInputs, tg.numOutputs, tg.testCases.size(), false) << std::endl;
                 passed++;
             } else {
                 failed++;
@@ -499,7 +500,7 @@ TEST(ForgeEngineTestAVX2Optimized, CompileAndExecuteWithGradient) {
             }
 
             if (graphPassed) {
-                std::cout << "  [PASS] [AVX2+Opt] " << tg.name << " | " << formatPassSummary(tg.testCases.size(), true) << std::endl;
+                std::cout << "  [PASS] [AVX2+Opt] " << tg.name << " | " << formatPassSummary(tg.numInputs, tg.numOutputs, tg.testCases.size(), true) << std::endl;
                 passed++;
             } else {
                 failed++;
