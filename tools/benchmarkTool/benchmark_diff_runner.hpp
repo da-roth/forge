@@ -559,13 +559,11 @@ private:
                 }
 
                 if (withGradient) {
-                    // Get gradients for all lanes
+                    // Get gradients for all lanes using consistent API
                     size_t gradIdx = buffer->getBufferIndex(diffInputNode);
-                    double gradLane0[1], gradLane1[1], gradLane2[1], gradLane3[1];
-                    double* gradOutputs[4] = {gradLane0, gradLane1, gradLane2, gradLane3};
                     std::vector<size_t> gradIndices = {gradIdx};
-                    buffer->getGradientLanes(gradIndices, gradOutputs);
-                    double vecGrads[4] = {gradLane0[0], gradLane1[0], gradLane2[0], gradLane3[0]};
+                    double vecGrads[4];
+                    buffer->getGradientLanes(gradIndices, vecGrads);
                     for (size_t j = 0; j < vectorWidth && (idx + j) < inputs.size(); ++j) {
                         gradients.push_back(vecGrads[j]);
                     }
@@ -586,13 +584,12 @@ private:
                 buffer->getLanes(outputNode, outputData);
                 values.push_back(outputData[0]);
                 if (withGradient) {
-                    // Get gradient using getGradientLanes
+                    // Get gradient using consistent API
                     size_t gradIdx = buffer->getBufferIndex(diffInputNode);
-                    double gradLane0[1];
-                    double* gradOutputs[4] = {gradLane0, nullptr, nullptr, nullptr};
                     std::vector<size_t> gradIndices = {gradIdx};
-                    buffer->getGradientLanes(gradIndices, gradOutputs);
-                    gradients.push_back(gradLane0[0]);
+                    double grad;
+                    buffer->getGradientLanes(gradIndices, &grad);
+                    gradients.push_back(grad);
                 }
             }
         }

@@ -292,14 +292,13 @@ public:
                             avx2Kernel->execute(*avx2Buffer);
                             double avx2Vec[4];
                             avx2Buffer->getLanes(avx2OutputNode, avx2Vec);
-                            // Get gradient for lane 0
+                            // Get gradient for all lanes
                             size_t gradIdx = avx2Buffer->getBufferIndex(avx2InputNode);
-                            double gradLane0[1], gradLane1[1], gradLane2[1], gradLane3[1];
-                            double* gradOutputs[4] = {gradLane0, gradLane1, gradLane2, gradLane3};
                             std::vector<size_t> gradIndices = {gradIdx};
-                            avx2Buffer->getGradientLanes(gradIndices, gradOutputs);
+                            double gradLanes[4];
+                            avx2Buffer->getGradientLanes(gradIndices, gradLanes);
                             result.avx2Result = avx2Vec[0];        // Use first lane result
-                            result.avx2Derivative = gradLane0[0];  // Use first lane gradient
+                            result.avx2Derivative = gradLanes[0];  // Use first lane gradient
                         }
                         auto avx2End = high_resolution_clock::now();
                         result.avx2TimeUs = duration<double, std::micro>(avx2End - avx2Start).count()
@@ -314,11 +313,9 @@ public:
                         avx2Buffer->getLanes(avx2OutputNode, finalAvx2Vec);
                         // Get all 4 gradient lanes
                         size_t finalGradIdx = avx2Buffer->getBufferIndex(avx2InputNode);
-                        double finalGradLane0[1], finalGradLane1[1], finalGradLane2[1], finalGradLane3[1];
-                        double* finalGradOutputs[4] = {finalGradLane0, finalGradLane1, finalGradLane2, finalGradLane3};
                         std::vector<size_t> finalGradIndices = {finalGradIdx};
-                        avx2Buffer->getGradientLanes(finalGradIndices, finalGradOutputs);
-                        double finalAvx2GradVec[4] = {finalGradLane0[0], finalGradLane1[0], finalGradLane2[0], finalGradLane3[0]};
+                        double finalAvx2GradVec[4];
+                        avx2Buffer->getGradientLanes(finalGradIndices, finalAvx2GradVec);
                         
                         for (int lane = 0; lane < 4; ++lane) {
                             double laneInput = batch[lane];
@@ -376,11 +373,10 @@ public:
                             result.avx2Result = outputData[0];
                             // Get gradient for lane 0
                             size_t gradIdx = avx2Buffer->getBufferIndex(avx2InputNode);
-                            double gradLane0[1];
-                            double* gradOutputs[4] = {gradLane0, nullptr, nullptr, nullptr};
                             std::vector<size_t> gradIndices = {gradIdx};
-                            avx2Buffer->getGradientLanes(gradIndices, gradOutputs);
-                            result.avx2Derivative = gradLane0[0];
+                            double gradLanes[4];
+                            avx2Buffer->getGradientLanes(gradIndices, gradLanes);
+                            result.avx2Derivative = gradLanes[0];
                         }
                         auto avx2End = high_resolution_clock::now();
                         result.avx2TimeUs = duration<double, std::micro>(avx2End - avx2Start).count()

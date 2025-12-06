@@ -276,7 +276,18 @@ public:
         }
     }
 
-    void getGradientLanes(const std::vector<size_t>& bufferIndices, double* outputs[4]) const override {
+    void getGradientLanes(const std::vector<size_t>& bufferIndices, double* output) const override {
+        if (!gradients_) return;
+
+        for (size_t i = 0; i < bufferIndices.size(); ++i) {
+            size_t baseIdx = bufferIndices[i];
+            // Load 4 contiguous doubles and store interleaved
+            __m256d grads = _mm256_load_pd(&gradients_[baseIdx]);
+            _mm256_storeu_pd(&output[i * vector_width_], grads);
+        }
+    }
+
+    void getGradientLanesSeparate(const std::vector<size_t>& bufferIndices, double* outputs[4]) const override {
         if (!gradients_) return;
 
         for (size_t i = 0; i < bufferIndices.size(); ++i) {
@@ -344,10 +355,9 @@ public:
         // Use getGradientLanes internally
         size_t bufferIdx = mappedNode * vector_width_;
         std::vector<size_t> indices = {bufferIdx};
-        double lane0[1];
-        double* outputs[4] = {lane0, nullptr, nullptr, nullptr};
-        getGradientLanes(indices, outputs);
-        return lane0[0];
+        double lanes[4];
+        getGradientLanes(indices, lanes);
+        return lanes[0];
     }
 
     void clearGradients() override {

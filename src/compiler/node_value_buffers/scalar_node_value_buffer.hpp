@@ -149,8 +149,16 @@ public:
         }
     }
 
-    // For scalar, only outputs[0] is filled (single lane)
-    void getGradientLanes(const std::vector<size_t>& bufferIndices, double* outputs[4]) const override {
+    // For scalar, output is simply contiguous gradients (vector width = 1)
+    void getGradientLanes(const std::vector<size_t>& bufferIndices, double* output) const override {
+        if (!gradients_) return;
+        for (size_t i = 0; i < bufferIndices.size(); ++i) {
+            output[i] = gradients_[bufferIndices[i]];
+        }
+    }
+
+    // Deprecated: separate lane pointers (for scalar, only outputs[0] is filled)
+    void getGradientLanesSeparate(const std::vector<size_t>& bufferIndices, double* outputs[4]) const override {
         if (!gradients_ || !outputs[0]) return;
         for (size_t i = 0; i < bufferIndices.size(); ++i) {
             outputs[0][i] = gradients_[bufferIndices[i]];
@@ -207,10 +215,9 @@ public:
 
         // Use getGradientLanes internally
         std::vector<size_t> indices = {mappedNode};
-        double lane0[1];
-        double* outputs[4] = {lane0, nullptr, nullptr, nullptr};
-        getGradientLanes(indices, outputs);
-        return lane0[0];
+        double grad;
+        getGradientLanes(indices, &grad);
+        return grad;
     }
 
     void clearGradients() override {

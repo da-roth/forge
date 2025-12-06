@@ -19,7 +19,7 @@ class StitchedKernel;
  * Primary API (Lanes): Raw pointer interface for performance-critical code.
  *   - setLanes(nodeId, ptr)           - Set all SIMD lanes from array
  *   - getLanes(nodeId, ptr)           - Get all SIMD lanes to array
- *   - getGradientLanes(indices, outputs[]) - Get gradients for all lanes
+ *   - getGradientLanes(indices, ptr)  - Get gradients (interleaved, adapts to vector width)
  *
  * Deprecated API: Convenience wrappers that internally call Lanes methods.
  *   - setValue(nodeId, value)         - Broadcasts to all lanes
@@ -52,13 +52,25 @@ public:
     virtual void getLanes(uint64_t nodeId, double* output) const = 0;
 
     /**
-     * Get gradients for multiple nodes, all lanes at once.
+     * Get gradients for multiple nodes, all lanes at once (interleaved layout).
      * This is the most efficient way to retrieve gradients in hot loops.
+     * @param bufferIndices Pre-computed buffer indices (from getBufferIndex)
+     * @param output Pointer with space for bufferIndices.size() * getVectorWidth() doubles.
+     *               Layout: [node0_lane0, node0_lane1, ..., node1_lane0, node1_lane1, ...]
+     *               For scalar (width=1): simply [grad0, grad1, grad2, ...]
+     *               For AVX2 (width=4): [n0_L0, n0_L1, n0_L2, n0_L3, n1_L0, n1_L1, ...]
+     */
+    virtual void getGradientLanes(const std::vector<size_t>& bufferIndices, double* output) const = 0;
+
+    /**
+     * @deprecated Use getGradientLanes(bufferIndices, double* output) instead.
+     * Get gradients for multiple nodes with separate lane pointers.
      * @param bufferIndices Pre-computed buffer indices (from getBufferIndex)
      * @param outputs Array of 4 pointers, one per lane. Each must have space for bufferIndices.size() doubles.
      *                For scalar buffers, only outputs[0] is filled.
      */
-    virtual void getGradientLanes(const std::vector<size_t>& bufferIndices, double* outputs[4]) const = 0;
+    [[deprecated("Use getGradientLanes(bufferIndices, double* output) for consistent API")]]
+    virtual void getGradientLanesSeparate(const std::vector<size_t>& bufferIndices, double* outputs[4]) const = 0;
 
     // ==========================================================================
     // DEPRECATED API: Convenience wrappers (internally use Lanes)
