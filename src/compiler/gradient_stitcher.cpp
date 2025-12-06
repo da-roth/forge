@@ -333,30 +333,22 @@ void GradientStitcher::generateGradientOperation(
             // We can get tan(x) from the already computed value[nodeId]
             if (node.a < graph.nodes.size() && graph.nodes[node.a].needsGradient) {
                 // Load the already computed tan(x) from forward pass
-                // Use offset calculation like other load operations
-                int64_t offset = static_cast<int64_t>(nodeId) * sizeof(double);
-                if (offset >= -128 && offset <= 127) {
-                    a.movsd(instructionSet->getRegister(1), asmjit::x86::ptr(asmjit::x86::rdi, static_cast<int32_t>(offset)));
-                } else {
-                    a.mov(asmjit::x86::rax, offset);
-                    a.add(asmjit::x86::rax, asmjit::x86::rdi);
-                    a.movsd(instructionSet->getRegister(1), asmjit::x86::ptr(asmjit::x86::rax));
-                }
-                
+                instructionSet->emitLoadValueForGradient(a, 1, nodeId, graph, &constantMap, constPoolLabel);
+
                 // Compute tan²(x)
-                instructionSet->emitMove(a, 2, 1);  // xmm2 = tan(x)
-                instructionSet->emitMul(a, 2, 1);   // xmm2 = tan²(x)
-                
+                instructionSet->emitMove(a, 2, 1);  // reg2 = tan(x)
+                instructionSet->emitMul(a, 2, 1);   // reg2 = tan²(x)
+
                 // Compute 1 + tan²(x) = sec²(x)
                 instructionSet->emitLoadImmediate(a, 3, 1.0);
-                instructionSet->emitAdd(a, 2, 3);  // xmm2 = 1 + tan²(x) = sec²(x)
-                
+                instructionSet->emitAdd(a, 2, 3);  // reg2 = 1 + tan²(x) = sec²(x)
+
                 // Load gradient of current node
                 instructionSet->emitLoadGradient(a, 0, nodeId);
-                
+
                 // Multiply gradient by sec²(x)
-                instructionSet->emitMul(a, 0, 2);  // xmm0 = grad[nodeId] * sec²(x)
-                
+                instructionSet->emitMul(a, 0, 2);  // reg0 = grad[nodeId] * sec²(x)
+
                 // Accumulate to grad[a]
                 instructionSet->emitAccumulateGradient(a, 0, node.a);
             }
