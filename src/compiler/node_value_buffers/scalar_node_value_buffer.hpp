@@ -117,49 +117,11 @@ public:
         }
     }
 
-    // Core value access
-        void setValue(uint64_t nodeId, double value) override {
-            // Map original node ID to optimized node ID
-            if (nodeId < originalToOptimizedMapping_.size()) {
-                uint64_t optimizedNodeId = originalToOptimizedMapping_[nodeId];
-                if (optimizedNodeId < num_nodes_) {
-                    values_[optimizedNodeId] = value;
-                }
-            }
-        }
-
-    double getValue(uint64_t nodeId) const override {
-        // Map original node ID to optimized node ID
-        if (nodeId < originalToOptimizedMapping_.size()) {
-            uint64_t optimizedNodeId = originalToOptimizedMapping_[nodeId];
-            if (optimizedNodeId != static_cast<uint64_t>(-1) && optimizedNodeId < num_nodes_) {
-                double result = values_[optimizedNodeId];
-                return result;
-            }
-        }
-        return 0.0;
-    }
-
-    // Vector lane access (returns single value for scalar)
-    void setVectorValue(uint64_t nodeId, const std::vector<double>& values) override {
-        if (nodeId < num_nodes_ && !values.empty()) {
-            values_[nodeId] = values[0];  // Use first value for scalar
-        }
-    }
-
-    std::vector<double> getVectorValue(uint64_t nodeId) const override {
-        std::vector<double> result;
-        if (nodeId < num_nodes_) {
-            result.push_back(values_[nodeId]);
-        }
-        return result;
-    }
-
     // ==========================================================================
-    // OPTIMIZED DIRECT ACCESS METHODS (trivial for scalar - lane is always 0)
+    // PRIMARY API: Lanes (raw pointer, no allocation)
     // ==========================================================================
 
-    void setVectorValueDirect(uint64_t nodeId, const double* values) override {
+    void setLanes(uint64_t nodeId, const double* values) override {
         // For scalar, just use the first value
         if (nodeId < originalToOptimizedMapping_.size()) {
             uint64_t optimizedNodeId = originalToOptimizedMapping_[nodeId];
@@ -169,14 +131,7 @@ public:
         }
     }
 
-    // For scalar, only inputs[0] is used (single lane)
-    void setVectorValuesDirectAllLanes(const std::vector<size_t>& bufferIndices, const double* inputs[4]) override {
-        for (size_t i = 0; i < bufferIndices.size(); ++i) {
-            values_[bufferIndices[i]] = inputs[0][i];
-        }
-    }
-
-    void getVectorValueDirect(uint64_t nodeId, double* output) const override {
+    void getLanes(uint64_t nodeId, double* output) const override {
         // For scalar, just return the single value
         if (nodeId < originalToOptimizedMapping_.size()) {
             uint64_t optimizedNodeId = originalToOptimizedMapping_[nodeId];
@@ -184,6 +139,29 @@ public:
                 output[0] = values_[optimizedNodeId];
             }
         }
+    }
+
+    // For scalar, only outputs[0] is filled (single lane)
+    void getGradientLanes(const std::vector<size_t>& bufferIndices, double* outputs[4]) const override {
+        if (!gradients_ || !outputs[0]) return;
+        for (size_t i = 0; i < bufferIndices.size(); ++i) {
+            outputs[0][i] = gradients_[bufferIndices[i]];
+        }
+    }
+
+    // ==========================================================================
+    // DEPRECATED API: Convenience wrappers (internally use Lanes)
+    // ==========================================================================
+
+    void setValue(uint64_t nodeId, double value) override {
+        double data[1] = {value};
+        setLanes(nodeId, data);
+    }
+
+    double getValue(uint64_t nodeId) const override {
+        double data[1] = {0.0};
+        getLanes(nodeId, data);
+        return data[0];
     }
 
     size_t getBufferIndex(uint64_t nodeId) const override {
@@ -197,7 +175,7 @@ public:
     }
 
     // ==========================================================================
-    // Gradient access
+    // Gradient access (deprecated getGradient uses getGradientLanes internally)
     // ==========================================================================
 
     double getGradient(forge::NodeId node) const override {
@@ -219,65 +197,12 @@ public:
             throw std::runtime_error("Node was not marked for differentiation");
         }
 
-        return gradients_[mappedNode];
-    }
-
-    std::vector<double> getVectorGradient(forge::NodeId node) const override {
-        return {getGradient(node)};
-    }
-
-    std::vector<double> getGradients() const override {
-        if (!gradients_) {
-            return {};
-        }
-
-        std::vector<double> result;
-        for (auto node : diff_inputs_) {
-            result.push_back(gradients_[node]);
-        }
-        return result;
-    }
-
-    // Fast batch gradient access - no validation, direct memory access
-    std::vector<double> getGradientsBatch(const std::vector<forge::NodeId>& nodes) const override {
-        std::vector<double> result;
-        if (!gradients_) {
-            return result;
-        }
-        result.resize(nodes.size());  // Resize once, no push_back
-        for (size_t i = 0; i < nodes.size(); ++i) {
-            // Map original node ID to optimized
-            forge::NodeId node = nodes[i];
-            forge::NodeId mappedNode = node;
-            if (node < originalToOptimizedMapping_.size()) {
-                auto candidate = originalToOptimizedMapping_[node];
-                if (candidate != static_cast<forge::NodeId>(UINT32_MAX)) {
-                    mappedNode = candidate;
-                }
-            }
-            // Direct array access - no validation
-            result[i] = gradients_[mappedNode];
-        }
-        return result;
-    }
-
-    // Ultra-fast: direct array read with pre-computed indices (no mapping, no allocation)
-    void getGradientsDirect(const std::vector<size_t>& bufferIndices, double* output) const override {
-        if (!gradients_) return;
-        for (size_t i = 0; i < bufferIndices.size(); ++i) {
-            output[i] = gradients_[bufferIndices[i]];
-        }
-    }
-
-    // For scalar, lane parameter is ignored (always 0)
-    void getGradientsDirectLane(const std::vector<size_t>& bufferIndices, int /*lane*/, double* output) const override {
-        // Scalar has only lane 0, so this is the same as getGradientsDirect
-        getGradientsDirect(bufferIndices, output);
-    }
-
-    // For scalar, only outputs[0] is filled (single lane)
-    void getGradientsDirectAllLanes(const std::vector<size_t>& bufferIndices, double* outputs[4]) const override {
-        getGradientsDirect(bufferIndices, outputs[0]);
+        // Use getGradientLanes internally
+        std::vector<size_t> indices = {mappedNode};
+        double lane0[1];
+        double* outputs[4] = {lane0, nullptr, nullptr, nullptr};
+        getGradientLanes(indices, outputs);
+        return lane0[0];
     }
 
     void clearGradients() override {

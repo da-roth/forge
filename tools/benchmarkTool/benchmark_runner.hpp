@@ -241,19 +241,23 @@ private:
         double testValue = testInputs[testInputs.size() / 2];
         
         // Step 4: Warmup for kernel
+        double inputData[4] = {testValue, testValue, testValue, testValue};
+        double outputData[4];
         for (int i = 0; i < config_.warmupIterations; ++i) {
-            buffer->setValue(inputNode, testValue);
+            buffer->setLanes(inputNode, inputData);
             kernel->execute(*buffer);
-            volatile double dummy = buffer->getValue(outputNode);
+            buffer->getLanes(outputNode, outputData);
+            volatile double dummy = outputData[0];
             (void)dummy;
         }
-        
+
         // Step 5: Benchmark kernel execution
         auto kernelBenchStart = high_resolution_clock::now();
         for (int i = 0; i < config_.benchmarkIterations; ++i) {
-            buffer->setValue(inputNode, testValue);
+            buffer->setLanes(inputNode, inputData);
             kernel->execute(*buffer);
-            volatile double dummy = buffer->getValue(outputNode);
+            buffer->getLanes(outputNode, outputData);
+            volatile double dummy = outputData[0];
             (void)dummy;
         }
         auto kernelBenchEnd = high_resolution_clock::now();
@@ -300,31 +304,28 @@ private:
                 
                 if (result.avx2VectorWidth == 4) {
                     // Test with 4 inputs simultaneously
-                    std::vector<double> batch(4);
-                    for (size_t i = 0; i < 4 && i < testInputs.size(); ++i) {
-                        batch[i] = testInputs[i];
+                    double batch[4];
+                    for (size_t i = 0; i < 4; ++i) {
+                        batch[i] = (i < testInputs.size()) ? testInputs[i] : testInputs.back();
                     }
-                    // Pad with last value if needed
-                    while (batch.size() < 4) {
-                        batch.push_back(testInputs.back());
-                    }
-                    
+
                     // Warmup
+                    double avx2OutputData[4];
                     for (int i = 0; i < config_.warmupIterations; ++i) {
-                        avx2Buffer->setVectorValue(inputNode, batch);
+                        avx2Buffer->setLanes(inputNode, batch);
                         avx2Kernel->execute(*avx2Buffer);
-                        auto dummy = avx2Buffer->getVectorValue(outputNode);
-                        volatile double d = dummy[0];
+                        avx2Buffer->getLanes(outputNode, avx2OutputData);
+                        volatile double d = avx2OutputData[0];
                         (void)d;
                     }
-                    
+
                     // Benchmark AVX2 execution
                     auto avx2BenchStart = high_resolution_clock::now();
                     for (int i = 0; i < config_.benchmarkIterations; ++i) {
-                        avx2Buffer->setVectorValue(inputNode, batch);
+                        avx2Buffer->setLanes(inputNode, batch);
                         avx2Kernel->execute(*avx2Buffer);
-                        auto dummy = avx2Buffer->getVectorValue(outputNode);
-                        volatile double d = dummy[0];
+                        avx2Buffer->getLanes(outputNode, avx2OutputData);
+                        volatile double d = avx2OutputData[0];
                         (void)d;
                     }
                     auto avx2BenchEnd = high_resolution_clock::now();
@@ -347,9 +348,12 @@ private:
         result.verificationPerInput.clear();
         if (config_.verifyResults) {
             for (double input : testInputs) {
-                buffer->setValue(inputNode, input);
+                double verifyInputData[4] = {input, input, input, input};
+                buffer->setLanes(inputNode, verifyInputData);
                 kernel->execute(*buffer);
-                double kernelResult = buffer->getValue(outputNode);
+                double verifyOutputData[4];
+                buffer->getLanes(outputNode, verifyOutputData);
+                double kernelResult = verifyOutputData[0];
                 double nativeResult = nativeFunc(input);
                 
                 // Handle inf/nan cases - if both are inf/nan, consider it verified

@@ -77,18 +77,9 @@ void ForwardStitcher::generateForwardOperation(
         }
 
         case OpCode::Constant: {
-            // Debug constant processing
-            if (nodeId == 3) {
-                std::cout << "[DEBUG] Processing Constant node 3, isActive=" << node.isActive
-                          << ", isDead=" << node.isDead << ", value=" << node.imm << std::endl;
-            }
-
             // Check if this constant was already processed by ensureInRegister
             if (processedConstants.count(nodeId) > 0) {
                 // Already processed, skip to avoid double-processing
-                if (nodeId == 3) {
-                    std::cout << "[DEBUG] Constant node 3 already processed, skipping" << std::endl;
-                }
                 break;
             }
 
@@ -96,9 +87,6 @@ void ForwardStitcher::generateForwardOperation(
             int existingReg = regState.findNodeInRegister(nodeId);
             if (existingReg >= 0) {
                 // Constant is already preloaded in a pinned register, nothing to do
-                if (nodeId == 3) {
-                    std::cout << "[DEBUG] Constant node 3 already in register " << existingReg << std::endl;
-                }
                 break;
             }
 
@@ -121,9 +109,6 @@ void ForwardStitcher::generateForwardOperation(
 
                 // Store to values[nodeId] unless deferred
                 if (!deferStore) {
-                    if (nodeId == 3) {
-                        std::cout << "[DEBUG] Storing constant node 3 to memory from register " << regIdx << std::endl;
-                    }
                     instructionSet->emitOptimizedStore(a, regIdx, nodeId);
                 }
 

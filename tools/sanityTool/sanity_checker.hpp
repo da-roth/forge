@@ -215,27 +215,31 @@ public:
             for (int i = 0; i < config_.warmupIterations; ++i) {
                 // For AVX2, set different values in each lane for better debugging
                 if (config_.instructionSet == CompilerConfig::InstructionSet::AVX2_PACKED) {
-                    std::vector<double> laneValues = {
+                    double laneValues[4] = {
                         input,
                         input + 0.001,
                         input + 0.002,
                         input + 0.003
                     };
-                    buffer->setVectorValue(inputNode, laneValues);
+                    buffer->setLanes(inputNode, laneValues);
                 } else {
-                    buffer->setValue(inputNode, input);
+                    double laneValue[1] = {input};
+                    buffer->setLanes(inputNode, laneValue);
                 }
                 kernel->execute(*buffer);
-                volatile double dummy = buffer->getValue(outputNode);
+                double outputData[4];
+                buffer->getLanes(outputNode, outputData);
+                volatile double dummy = outputData[0];
                 (void)dummy;
-                
+
                 // After first execution, print buffer state for debugging
-                if (i == 0 && config_.instructionSet == CompilerConfig::InstructionSet::AVX2_PACKED && 
+                if (i == 0 && config_.instructionSet == CompilerConfig::InstructionSet::AVX2_PACKED &&
                     config_.verbose && results_.size() < 1) {
                     std::cout << "\n=== Buffer State After First Execution ===\n";
                     std::cout << "Graph has " << tapeGraph.nodes.size() << " nodes\n";
                     for (uint64_t nodeId = 0; nodeId < buffer->getNumNodes() && nodeId < 10; nodeId++) {
-                        auto values = buffer->getVectorValue(nodeId);
+                        double values[4];
+                        buffer->getLanes(nodeId, values);
                         std::cout << "Node " << nodeId << " (";
                         // Print node type if available
                         if (nodeId < tapeGraph.nodes.size()) {
@@ -254,14 +258,15 @@ public:
                                 default: std::cout << "Op" << static_cast<int>(opCode); break;
                             }
                             // Print constant value if it's a constant node
-                            if (opCode == forge::OpCode::Constant && 
+                            if (opCode == forge::OpCode::Constant &&
                                 nodeId < tapeGraph.nodes.size()) {
                                 std::cout << " = " << tapeGraph.nodes[nodeId].imm;
                             }
                         }
                         std::cout << "): ";
-                        for (auto v : values) {
-                            std::cout << std::fixed << std::setprecision(3) << v << " ";
+                        int width = buffer->getVectorWidth();
+                        for (int v = 0; v < width; v++) {
+                            std::cout << std::fixed << std::setprecision(3) << values[v] << " ";
                         }
                         std::cout << std::endl;
                     }
@@ -274,34 +279,38 @@ public:
             for (int i = 0; i < config_.timingIterations; ++i) {
                 // For AVX2, set different values in each lane for better debugging
                 if (config_.instructionSet == CompilerConfig::InstructionSet::AVX2_PACKED) {
-                    std::vector<double> laneValues = {
+                    double laneValues[4] = {
                         input,
                         input + 0.001,
                         input + 0.002,
                         input + 0.003
                     };
-                    buffer->setVectorValue(inputNode, laneValues);
+                    buffer->setLanes(inputNode, laneValues);
                 } else {
-                    buffer->setValue(inputNode, input);
+                    double laneValue[1] = {input};
+                    buffer->setLanes(inputNode, laneValue);
                 }
                 kernel->execute(*buffer);
-                result.tapeResult = buffer->getValue(outputNode);
+                double outputData[4];
+                buffer->getLanes(outputNode, outputData);
+                result.tapeResult = outputData[0];
             }
             auto tapeEnd = high_resolution_clock::now();
-            result.tapeTimeUs = duration<double, std::micro>(tapeEnd - tapeStart).count() 
+            result.tapeTimeUs = duration<double, std::micro>(tapeEnd - tapeStart).count()
                                / config_.timingIterations;
-            
-            
+
+
             // ===== Compare results =====
             // For AVX2, we need to check all lanes
             if (config_.instructionSet == CompilerConfig::InstructionSet::AVX2_PACKED) {
-                std::vector<double> outputLanes = buffer->getVectorValue(outputNode);
-                
+                double outputLanes[4];
+                buffer->getLanes(outputNode, outputLanes);
+
                 // Compare each lane with native result for the corresponding input
-                std::vector<double> laneInputs = {input, input + 0.001, input + 0.002, input + 0.003};
+                double laneInputs[4] = {input, input + 0.001, input + 0.002, input + 0.003};
                 bool allLanesPassed = true;
                 double maxError = 0.0;
-                for (size_t i = 0; i < outputLanes.size() && i < laneInputs.size(); ++i) {
+                for (int i = 0; i < 4; ++i) {
                     auto nativeRaw = funcDouble_(laneInputs[i]);
                     double nativeForLane = ConvertToDouble<decltype(nativeRaw)>::convert(nativeRaw);
                     double laneError = std::abs(outputLanes[i] - nativeForLane);

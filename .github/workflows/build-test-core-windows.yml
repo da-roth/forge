@@ -1,0 +1,54 @@
+name: Build & Test Core (Windows)
+
+on:
+  push:
+    branches: [ main, develop, 'v*' ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+jobs:
+  build-and-test:
+    runs-on: windows-latest
+
+    strategy:
+      matrix:
+        build_type: [Release, Debug]
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Setup MSVC
+      uses: microsoft/setup-msbuild@v2
+
+    - name: Configure CMake
+      run: |
+        cmake -B build -S . `
+          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} `
+          -DFORGE_USE_STATIC_RUNTIME=ON
+
+    - name: Build Forge library
+      run: cmake --build build --config ${{ matrix.build_type }} --target forge
+
+    - name: Build Core tests
+      run: cmake --build build --config ${{ matrix.build_type }} --target forge_tests
+
+    - name: Run Core tests
+      run: |
+        cd build
+        ctest -C ${{ matrix.build_type }} -R "forge_tests" --output-on-failure --timeout 120
+      env:
+        CTEST_OUTPUT_ON_FAILURE: 1
+
+    - name: Upload test results on failure
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-results-core-windows-${{ matrix.build_type }}
+        path: |
+          build/Testing/
+          build/bin/*.log
+        retention-days: 7

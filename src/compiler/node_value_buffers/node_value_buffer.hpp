@@ -13,77 +13,105 @@ class StitchedKernel;
 /**
  * Interface for node value storage that kernels read from and write to.
  * Different implementations handle different memory layouts (scalar vs SIMD).
+ *
+ * == API Design ==
+ *
+ * Primary API (Lanes): Raw pointer interface for performance-critical code.
+ *   - setLanes(nodeId, ptr)           - Set all SIMD lanes from array
+ *   - getLanes(nodeId, ptr)           - Get all SIMD lanes to array
+ *   - getGradientLanes(indices, outputs[]) - Get gradients for all lanes
+ *
+ * Deprecated API: Convenience wrappers that internally call Lanes methods.
+ *   - setValue(nodeId, value)         - Broadcasts to all lanes
+ *   - getValue(nodeId)                - Returns lane 0
+ *   - getGradient(nodeId)             - Returns lane 0 gradient
+ *
+ * The deprecated methods will be removed in a future version.
+ * Migrate to the Lanes API for better performance.
  */
 class INodeValueBuffer {
 public:
     virtual ~INodeValueBuffer() = default;
 
-    // Core value access
+    // ==========================================================================
+    // PRIMARY API: Lanes (raw pointer, no allocation)
+    // ==========================================================================
+
+    /**
+     * Set values for all SIMD lanes from a raw pointer.
+     * @param nodeId The node to set values for
+     * @param values Pointer to getVectorWidth() doubles (4 for AVX2, 1 for scalar)
+     */
+    virtual void setLanes(uint64_t nodeId, const double* values) = 0;
+
+    /**
+     * Get values for all SIMD lanes into a raw pointer.
+     * @param nodeId The node to get values from
+     * @param output Pointer with space for getVectorWidth() doubles
+     */
+    virtual void getLanes(uint64_t nodeId, double* output) const = 0;
+
+    /**
+     * Get gradients for multiple nodes, all lanes at once.
+     * This is the most efficient way to retrieve gradients in hot loops.
+     * @param bufferIndices Pre-computed buffer indices (from getBufferIndex)
+     * @param outputs Array of 4 pointers, one per lane. Each must have space for bufferIndices.size() doubles.
+     *                For scalar buffers, only outputs[0] is filled.
+     */
+    virtual void getGradientLanes(const std::vector<size_t>& bufferIndices, double* outputs[4]) const = 0;
+
+    // ==========================================================================
+    // DEPRECATED API: Convenience wrappers (internally use Lanes)
+    // ==========================================================================
+
+    /**
+     * @deprecated Use setLanes() for better performance.
+     * Set a single value, broadcast to all SIMD lanes.
+     */
+    [[deprecated("Use setLanes() for better performance")]]
     virtual void setValue(uint64_t nodeId, double value) = 0;
+
+    /**
+     * @deprecated Use getLanes() for better performance.
+     * Get a single value (lane 0).
+     */
+    [[deprecated("Use getLanes() for better performance")]]
     virtual double getValue(uint64_t nodeId) const = 0;
 
-    // Vector lane access (for SIMD operations)
-    virtual void setVectorValue(uint64_t nodeId, const std::vector<double>& values) = 0;
-    virtual std::vector<double> getVectorValue(uint64_t nodeId) const = 0;
+    /**
+     * @deprecated Use getGradientLanes() for better performance.
+     * Get gradient for a single node (lane 0).
+     */
+    [[deprecated("Use getGradientLanes() for better performance")]]
+    virtual double getGradient(forge::NodeId node) const = 0;
 
     // ==========================================================================
-    // OPTIMIZED DIRECT ACCESS METHODS (avoid allocations in hot loops)
+    // Supporting methods
     // ==========================================================================
 
-    // Set vector values from raw pointer (no std::vector creation needed)
-    // values must point to getVectorWidth() doubles
-    virtual void setVectorValueDirect(uint64_t nodeId, const double* values) = 0;
-
-    // Set values for ALL lanes across multiple nodes in a single pass (cache-friendly)
-    // bufferIndices[i] points to lane 0 of node i
-    // inputs is an array of 4 pointers, one per lane; each has bufferIndices.size() doubles
-    // For scalar buffers, only inputs[0] is used
-    virtual void setVectorValuesDirectAllLanes(const std::vector<size_t>& bufferIndices, const double* inputs[4]) = 0;
-
-    // Get vector values into caller-provided buffer (no allocation)
-    // output must point to getVectorWidth() doubles
-    virtual void getVectorValueDirect(uint64_t nodeId, double* output) const = 0;
-
-    // Get buffer index for a node ID (for pre-computing indices outside hot loop)
-    // Returns the base index into values_/gradients_ arrays
-    // Returns SIZE_MAX if nodeId is invalid
+    /**
+     * Get buffer index for a node ID.
+     * Use this to pre-compute indices outside hot loops for use with getGradientLanes().
+     * @return The base index into values_/gradients_ arrays, or SIZE_MAX if invalid
+     */
     virtual size_t getBufferIndex(uint64_t nodeId) const = 0;
 
-    // ==========================================================================
-    // Gradient access (for automatic differentiation)
-    // ==========================================================================
-    virtual double getGradient(forge::NodeId node) const = 0;
-    virtual std::vector<double> getVectorGradient(forge::NodeId node) const = 0;
-    virtual std::vector<double> getGradients() const = 0;
-
-    // Batch gradient access - returns gradients for specified nodes in order (fast, no validation)
-    virtual std::vector<double> getGradientsBatch(const std::vector<forge::NodeId>& nodes) const = 0;
-
-    // Ultra-fast: write gradients directly to output array using pre-computed buffer indices
-    // bufferIndices should contain the actual index into gradients_ array (already mapped and multiplied by vector_width)
-    // Returns lane 0 for each node
-    virtual void getGradientsDirect(const std::vector<size_t>& bufferIndices, double* output) const = 0;
-
-    // Get gradients for a specific lane across multiple nodes
-    // bufferIndices[i] points to lane 0 of node i; this method reads lane `lane` for each
-    // lane must be in [0, getVectorWidth())
-    virtual void getGradientsDirectLane(const std::vector<size_t>& bufferIndices, int lane, double* output) const = 0;
-
-    // Get gradients for ALL lanes across multiple nodes in a single pass (cache-friendly)
-    // bufferIndices[i] points to lane 0 of node i
-    // outputs is an array of 4 pointers, one per lane; each must have space for bufferIndices.size() doubles
-    // For scalar buffers, only outputs[0] is filled
-    virtual void getGradientsDirectAllLanes(const std::vector<size_t>& bufferIndices, double* outputs[4]) const = 0;
-
+    /** Clear all gradients to zero */
     virtual void clearGradients() = 0;
+
+    /** Check if gradients have been computed */
     virtual bool hasGradients() const = 0;
 
-    // Buffer info
+    /** Get the SIMD vector width (1 for scalar, 4 for AVX2) */
     virtual int getVectorWidth() const = 0;
+
+    /** Get the number of nodes in this buffer */
     virtual uint64_t getNumNodes() const = 0;
 
-    // Raw access for kernel execution
+    /** Get raw pointer to values buffer (for direct AVX2 intrinsic access) */
     virtual double* getValuesPtr() = 0;
+
+    /** Get raw pointer to gradients buffer (for direct AVX2 intrinsic access) */
     virtual double* getGradientsPtr() = 0;
 };
 

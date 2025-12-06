@@ -238,90 +238,11 @@ public:
         }
     }
 
-    // Core value access
-    void setValue(uint64_t nodeId, double value) override {
-        // Map original node ID to optimized node ID
-        if (nodeId < originalToOptimizedMapping_.size()) {
-            uint64_t optimizedNodeId = originalToOptimizedMapping_[nodeId];
-            // FIX: Check for invalid mapping (-1 sentinel value)
-            if (optimizedNodeId != static_cast<uint64_t>(-1) && optimizedNodeId < num_nodes_) {
-                // Broadcast to all 4 lanes
-                size_t baseIdx = optimizedNodeId * vector_width_;
-                // Safety check for buffer overflow
-                size_t endIdx = baseIdx + vector_width_;
-                if (endIdx <= num_nodes_ * vector_width_) {
-                    for (int i = 0; i < vector_width_; i++) {
-                        values_[baseIdx + i] = value;
-                    }
-                }
-            }
-        }
-    }
-
-    double getValue(uint64_t nodeId) const override {
-        // Map original node ID to optimized node ID
-        if (nodeId < originalToOptimizedMapping_.size()) {
-            uint64_t optimizedNodeId = originalToOptimizedMapping_[nodeId];
-            if (optimizedNodeId != static_cast<uint64_t>(-1) && optimizedNodeId < num_nodes_) {
-                size_t baseIdx = optimizedNodeId * vector_width_;
-                double result = values_[baseIdx];
-
-                return result;
-            }
-        }
-        return 0.0;
-    }
-
-    // Vector lane access
-    void setVectorValue(uint64_t nodeId, const std::vector<double>& values) override {
-        // Map original node ID to optimized node ID
-        if (nodeId < originalToOptimizedMapping_.size()) {
-            uint64_t optimizedNodeId = originalToOptimizedMapping_[nodeId];
-            if (optimizedNodeId != static_cast<uint64_t>(-1) && optimizedNodeId < num_nodes_) {
-                size_t baseIdx = optimizedNodeId * vector_width_;
-                size_t numValues = std::min(static_cast<size_t>(vector_width_), values.size());
-
-                // Set provided values
-                for (size_t i = 0; i < numValues; i++) {
-                    values_[baseIdx + i] = values[i];
-                }
-
-                // Replicate last value if fewer than 4 provided
-                if (values.size() < static_cast<size_t>(vector_width_) && !values.empty()) {
-                    double lastValue = values.back();
-                    for (size_t i = numValues; i < static_cast<size_t>(vector_width_); i++) {
-                        values_[baseIdx + i] = lastValue;
-                    }
-                }
-            }
-        }
-    }
-
-    std::vector<double> getVectorValue(uint64_t nodeId) const override {
-        std::vector<double> result;
-
-        // Map original node ID to optimized node ID
-        if (nodeId < originalToOptimizedMapping_.size()) {
-            uint64_t optimizedNodeId = originalToOptimizedMapping_[nodeId];
-            if (optimizedNodeId != static_cast<uint64_t>(-1) && optimizedNodeId < num_nodes_) {
-                size_t baseIdx = optimizedNodeId * vector_width_;
-                for (int i = 0; i < vector_width_; i++) {
-                    result.push_back(values_[baseIdx + i]);
-                }
-                return result;
-            } else {
-            }
-        } else {
-        }
-
-        return result;
-    }
-
     // ==========================================================================
-    // OPTIMIZED DIRECT ACCESS METHODS
+    // PRIMARY API: Lanes (raw pointer, no allocation)
     // ==========================================================================
 
-    void setVectorValueDirect(uint64_t nodeId, const double* values) override {
+    void setLanes(uint64_t nodeId, const double* values) override {
         if (nodeId < originalToOptimizedMapping_.size()) {
             uint64_t optimizedNodeId = originalToOptimizedMapping_[nodeId];
             if (optimizedNodeId != static_cast<uint64_t>(-1) && optimizedNodeId < num_nodes_) {
@@ -332,24 +253,7 @@ public:
         }
     }
 
-    // Set values for ALL lanes in a single cache-friendly pass using AVX2 intrinsics
-    // Gathers from 4 input arrays and stores contiguously
-    void setVectorValuesDirectAllLanes(const std::vector<size_t>& bufferIndices, const double* inputs[4]) override {
-        AVX2BufferTiming::setInputsCalls++;
-        auto loopStart = std::chrono::high_resolution_clock::now();
-
-        for (size_t i = 0; i < bufferIndices.size(); ++i) {
-            size_t baseIdx = bufferIndices[i];
-            // Gather from 4 different arrays, store contiguously
-            __m256d vals = _mm256_set_pd(inputs[3][i], inputs[2][i], inputs[1][i], inputs[0][i]);
-            _mm256_store_pd(&values_[baseIdx], vals);
-        }
-
-        auto loopEnd = std::chrono::high_resolution_clock::now();
-        AVX2BufferTiming::setInputsLoopNs += std::chrono::duration_cast<std::chrono::nanoseconds>(loopEnd - loopStart).count();
-    }
-
-    void getVectorValueDirect(uint64_t nodeId, double* output) const override {
+    void getLanes(uint64_t nodeId, double* output) const override {
         if (nodeId < originalToOptimizedMapping_.size()) {
             uint64_t optimizedNodeId = originalToOptimizedMapping_[nodeId];
             if (optimizedNodeId != static_cast<uint64_t>(-1) && optimizedNodeId < num_nodes_) {
@@ -358,6 +262,39 @@ public:
                 std::memcpy(output, &values_[baseIdx], vector_width_ * sizeof(double));
             }
         }
+    }
+
+    void getGradientLanes(const std::vector<size_t>& bufferIndices, double* outputs[4]) const override {
+        if (!gradients_) return;
+
+        for (size_t i = 0; i < bufferIndices.size(); ++i) {
+            size_t baseIdx = bufferIndices[i];
+            // Load 4 contiguous doubles
+            __m256d grads = _mm256_load_pd(&gradients_[baseIdx]);
+            // Extract to 4 different output arrays (only write to non-null pointers)
+            __m128d lo = _mm256_castpd256_pd128(grads);      // lanes 0, 1
+            __m128d hi = _mm256_extractf128_pd(grads, 1);    // lanes 2, 3
+            if (outputs[0]) outputs[0][i] = _mm_cvtsd_f64(lo);               // lane 0
+            if (outputs[1]) outputs[1][i] = _mm_cvtsd_f64(_mm_unpackhi_pd(lo, lo));  // lane 1
+            if (outputs[2]) outputs[2][i] = _mm_cvtsd_f64(hi);               // lane 2
+            if (outputs[3]) outputs[3][i] = _mm_cvtsd_f64(_mm_unpackhi_pd(hi, hi));  // lane 3
+        }
+    }
+
+    // ==========================================================================
+    // DEPRECATED API: Convenience wrappers (internally use Lanes)
+    // ==========================================================================
+
+    void setValue(uint64_t nodeId, double value) override {
+        // Broadcast to all 4 lanes
+        double data[4] = {value, value, value, value};
+        setLanes(nodeId, data);
+    }
+
+    double getValue(uint64_t nodeId) const override {
+        double data[4];
+        getLanes(nodeId, data);
+        return data[0];  // Return lane 0
     }
 
     size_t getBufferIndex(uint64_t nodeId) const override {
@@ -371,7 +308,7 @@ public:
     }
 
     // ==========================================================================
-    // Gradient access
+    // Gradient access (deprecated getGradient uses getGradientLanes internally)
     // ==========================================================================
 
     double getGradient(forge::NodeId node) const override {
@@ -392,113 +329,13 @@ public:
             throw std::runtime_error("Node was not marked for differentiation");
         }
 
-        // Return first lane of gradient
-        return gradients_[mappedNode * vector_width_];
-    }
-
-    std::vector<double> getVectorGradient(forge::NodeId node) const override {
-        if (!gradients_) {
-            throw std::runtime_error("No gradients computed - no inputs marked with markInputAndDiff()");
-        }
-        // Map original node ID to optimized
-        forge::NodeId mappedNode = node;
-        if (node < originalToOptimizedMapping_.size()) {
-            auto candidate = originalToOptimizedMapping_[node];
-            if (candidate != static_cast<forge::NodeId>(UINT32_MAX)) {
-                mappedNode = candidate;
-            }
-        }
-
-        auto it = std::find(diff_inputs_.begin(), diff_inputs_.end(), mappedNode);
-        if (it == diff_inputs_.end()) {
-            throw std::runtime_error("Node was not marked for differentiation");
-        }
-
-        std::vector<double> result;
-        size_t baseIdx = mappedNode * vector_width_;
-        for (int i = 0; i < vector_width_; i++) {
-            result.push_back(gradients_[baseIdx + i]);
-        }
-        return result;
-    }
-
-    std::vector<double> getGradients() const override {
-        if (!gradients_) {
-            return {};
-        }
-
-        std::vector<double> result;
-        for (auto node : diff_inputs_) {
-            // Return first lane for each gradient
-            result.push_back(gradients_[node * vector_width_]);
-        }
-        return result;
-    }
-
-    // Fast batch gradient access - no validation, direct memory access
-    std::vector<double> getGradientsBatch(const std::vector<forge::NodeId>& nodes) const override {
-        std::vector<double> result;
-        if (!gradients_) {
-            return result;
-        }
-        result.resize(nodes.size());  // Resize once, no push_back
-        for (size_t i = 0; i < nodes.size(); ++i) {
-            // Map original node ID to optimized
-            forge::NodeId node = nodes[i];
-            forge::NodeId mappedNode = node;
-            if (node < originalToOptimizedMapping_.size()) {
-                auto candidate = originalToOptimizedMapping_[node];
-                if (candidate != static_cast<forge::NodeId>(UINT32_MAX)) {
-                    mappedNode = candidate;
-                }
-            }
-            // Direct array access - no validation
-            result[i] = gradients_[mappedNode * vector_width_];
-        }
-        return result;
-    }
-
-    // Ultra-fast: direct array read with pre-computed indices (no mapping, no allocation)
-    // Returns lane 0 for each node
-    void getGradientsDirect(const std::vector<size_t>& bufferIndices, double* output) const override {
-        if (!gradients_) return;
-        for (size_t i = 0; i < bufferIndices.size(); ++i) {
-            output[i] = gradients_[bufferIndices[i]];
-        }
-    }
-
-    // Get gradients for a specific lane across multiple nodes
-    // bufferIndices[i] points to lane 0 of node i; this method reads lane `lane` for each
-    void getGradientsDirectLane(const std::vector<size_t>& bufferIndices, int lane, double* output) const override {
-        if (!gradients_) return;
-        for (size_t i = 0; i < bufferIndices.size(); ++i) {
-            output[i] = gradients_[bufferIndices[i] + lane];
-        }
-    }
-
-    // Get gradients for ALL lanes in a single cache-friendly pass using AVX2 intrinsics
-    // Reads 4 contiguous doubles per node, scatters to 4 output arrays
-    void getGradientsDirectAllLanes(const std::vector<size_t>& bufferIndices, double* outputs[4]) const override {
-        if (!gradients_) return;
-        AVX2BufferTiming::getGradientsCalls++;
-        auto loopStart = std::chrono::high_resolution_clock::now();
-
-        for (size_t i = 0; i < bufferIndices.size(); ++i) {
-            size_t baseIdx = bufferIndices[i];
-            // Load 4 contiguous doubles
-            __m256d grads = _mm256_load_pd(&gradients_[baseIdx]);
-            // Extract to 4 different output arrays
-            // Lane 0 and 1 are in low 128 bits, lane 2 and 3 in high 128 bits
-            __m128d lo = _mm256_castpd256_pd128(grads);      // lanes 0, 1
-            __m128d hi = _mm256_extractf128_pd(grads, 1);    // lanes 2, 3
-            outputs[0][i] = _mm_cvtsd_f64(lo);               // lane 0
-            outputs[1][i] = _mm_cvtsd_f64(_mm_unpackhi_pd(lo, lo));  // lane 1
-            outputs[2][i] = _mm_cvtsd_f64(hi);               // lane 2
-            outputs[3][i] = _mm_cvtsd_f64(_mm_unpackhi_pd(hi, hi));  // lane 3
-        }
-
-        auto loopEnd = std::chrono::high_resolution_clock::now();
-        AVX2BufferTiming::getGradientsLoopNs += std::chrono::duration_cast<std::chrono::nanoseconds>(loopEnd - loopStart).count();
+        // Use getGradientLanes internally
+        size_t bufferIdx = mappedNode * vector_width_;
+        std::vector<size_t> indices = {bufferIdx};
+        double lane0[1];
+        double* outputs[4] = {lane0, nullptr, nullptr, nullptr};
+        getGradientLanes(indices, outputs);
+        return lane0[0];
     }
 
     void clearGradients() override {

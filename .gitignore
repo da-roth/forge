@@ -11,6 +11,7 @@ cmake-build-*/
 *.suo
 *.sln
 *.workspace
+.idea/
 
 # Compiled files
 *.o
@@ -21,10 +22,12 @@ cmake-build-*/
 *.so
 *.dylib
 *.exe
+*.log
 
 # Generated files
 compile_commands.json
 .cache/
+coverage_report
 
 # Test outputs
 *.json
@@ -33,3 +36,4 @@ compile_commands.json
 # Documentation
 docs/html/
 docs/latex/
+docs/

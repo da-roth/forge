@@ -271,46 +271,60 @@ public:
                     if (config_.testAvx2Vectorized && avx2Buffer->getVectorWidth() == 4) {
                         // Test AVX2 with 4 inputs simultaneously (like benchmark does)
                         // Create batched input: [input, input+0.01, input+0.02, input+0.03]
-                        std::vector<double> batch = {input, input + 0.01, input + 0.02, input + 0.03};
-                        
+                        double batch[4] = {input, input + 0.01, input + 0.02, input + 0.03};
+
                         // AVX2 Warmup
                         for (int i = 0; i < config_.warmupIterations; ++i) {
-                            avx2Buffer->setVectorValue(avx2InputNode, batch);
+                            avx2Buffer->setLanes(avx2InputNode, batch);
                             avx2Buffer->clearGradients();
                             avx2Kernel->execute(*avx2Buffer);
-                            auto dummyVec = avx2Buffer->getVectorValue(avx2OutputNode);
+                            double dummyVec[4];
+                            avx2Buffer->getLanes(avx2OutputNode, dummyVec);
                             volatile double dummy = dummyVec[0];  // Use first lane
                             (void)dummy;
                         }
-                        
+
                         // AVX2 Timed evaluation with gradient computation
                         auto avx2Start = high_resolution_clock::now();
                         for (int i = 0; i < config_.timingIterations; ++i) {
-                            avx2Buffer->setVectorValue(avx2InputNode, batch);
+                            avx2Buffer->setLanes(avx2InputNode, batch);
                             avx2Buffer->clearGradients();
                             avx2Kernel->execute(*avx2Buffer);
-                            auto avx2Vec = avx2Buffer->getVectorValue(avx2OutputNode);
-                            auto avx2GradVec = avx2Buffer->getVectorGradient(avx2InputNode);
+                            double avx2Vec[4];
+                            avx2Buffer->getLanes(avx2OutputNode, avx2Vec);
+                            // Get gradient for lane 0
+                            size_t gradIdx = avx2Buffer->getBufferIndex(avx2InputNode);
+                            double gradLane0[1], gradLane1[1], gradLane2[1], gradLane3[1];
+                            double* gradOutputs[4] = {gradLane0, gradLane1, gradLane2, gradLane3};
+                            std::vector<size_t> gradIndices = {gradIdx};
+                            avx2Buffer->getGradientLanes(gradIndices, gradOutputs);
                             result.avx2Result = avx2Vec[0];        // Use first lane result
-                            result.avx2Derivative = avx2GradVec[0]; // Use first lane gradient
+                            result.avx2Derivative = gradLane0[0];  // Use first lane gradient
                         }
                         auto avx2End = high_resolution_clock::now();
-                        result.avx2TimeUs = duration<double, std::micro>(avx2End - avx2Start).count() 
+                        result.avx2TimeUs = duration<double, std::micro>(avx2End - avx2Start).count()
                                            / config_.timingIterations;
-                        
+
                         // Verify all 4 vectorized lanes against native finite differences
                         bool allVectorLanesPassed = true;
-                        avx2Buffer->setVectorValue(avx2InputNode, batch);
+                        avx2Buffer->setLanes(avx2InputNode, batch);
                         avx2Buffer->clearGradients();
                         avx2Kernel->execute(*avx2Buffer);
-                        auto finalAvx2Vec = avx2Buffer->getVectorValue(avx2OutputNode);
-                        auto finalAvx2GradVec = avx2Buffer->getVectorGradient(avx2InputNode);
+                        double finalAvx2Vec[4];
+                        avx2Buffer->getLanes(avx2OutputNode, finalAvx2Vec);
+                        // Get all 4 gradient lanes
+                        size_t finalGradIdx = avx2Buffer->getBufferIndex(avx2InputNode);
+                        double finalGradLane0[1], finalGradLane1[1], finalGradLane2[1], finalGradLane3[1];
+                        double* finalGradOutputs[4] = {finalGradLane0, finalGradLane1, finalGradLane2, finalGradLane3};
+                        std::vector<size_t> finalGradIndices = {finalGradIdx};
+                        avx2Buffer->getGradientLanes(finalGradIndices, finalGradOutputs);
+                        double finalAvx2GradVec[4] = {finalGradLane0[0], finalGradLane1[0], finalGradLane2[0], finalGradLane3[0]};
                         
                         for (int lane = 0; lane < 4; ++lane) {
                             double laneInput = batch[lane];
                             double nativeLaneResult = funcDouble_(laneInput);
                             double nativeLaneDerivative = computeFiniteDifference(laneInput);
-                            
+
                             double avx2LaneResult = finalAvx2Vec[lane];
                             double avx2LaneDerivative = finalAvx2GradVec[lane];
                             
@@ -340,25 +354,36 @@ public:
                         
                     } else {
                         // Fall back to single-input AVX2 testing (original behavior)
+                        double inputData[4] = {input, input, input, input};
                         for (int i = 0; i < config_.warmupIterations; ++i) {
-                            avx2Buffer->setValue(avx2InputNode, input);
+                            avx2Buffer->setLanes(avx2InputNode, inputData);
                             avx2Buffer->clearGradients();
                             avx2Kernel->execute(*avx2Buffer);
-                            volatile double dummy = avx2Buffer->getValue(avx2OutputNode);
+                            double outputData[4];
+                            avx2Buffer->getLanes(avx2OutputNode, outputData);
+                            volatile double dummy = outputData[0];
                             (void)dummy;
                         }
-                        
+
                         // AVX2 Timed evaluation with gradient computation
                         auto avx2Start = high_resolution_clock::now();
                         for (int i = 0; i < config_.timingIterations; ++i) {
-                            avx2Buffer->setValue(avx2InputNode, input);
+                            avx2Buffer->setLanes(avx2InputNode, inputData);
                             avx2Buffer->clearGradients();
                             avx2Kernel->execute(*avx2Buffer);
-                            result.avx2Result = avx2Buffer->getValue(avx2OutputNode);
-                            result.avx2Derivative = avx2Buffer->getGradient(avx2InputNode);
+                            double outputData[4];
+                            avx2Buffer->getLanes(avx2OutputNode, outputData);
+                            result.avx2Result = outputData[0];
+                            // Get gradient for lane 0
+                            size_t gradIdx = avx2Buffer->getBufferIndex(avx2InputNode);
+                            double gradLane0[1];
+                            double* gradOutputs[4] = {gradLane0, nullptr, nullptr, nullptr};
+                            std::vector<size_t> gradIndices = {gradIdx};
+                            avx2Buffer->getGradientLanes(gradIndices, gradOutputs);
+                            result.avx2Derivative = gradLane0[0];
                         }
                         auto avx2End = high_resolution_clock::now();
-                        result.avx2TimeUs = duration<double, std::micro>(avx2End - avx2Start).count() 
+                        result.avx2TimeUs = duration<double, std::micro>(avx2End - avx2Start).count()
                                            / config_.timingIterations;
                     }
                     

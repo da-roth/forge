@@ -486,31 +486,33 @@ private:
                     size_t vectorWidth = buffer->getVectorWidth();
                     for (size_t idx = 0; idx < inputs.size(); idx += vectorWidth) {
                         // Create batch of up to vectorWidth values
-                        std::vector<double> batch;
+                        double batch[4] = {0, 0, 0, 0};
                         for (size_t j = 0; j < vectorWidth && (idx + j) < inputs.size(); ++j) {
-                            batch.push_back(inputs[idx + j]);
+                            batch[j] = inputs[idx + j];
                         }
                         // Pad with last value if needed
-                        while (batch.size() < vectorWidth) {
-                            batch.push_back(batch.back());
+                        double lastVal = (idx < inputs.size()) ? inputs[idx] : inputs.back();
+                        for (size_t j = std::min(vectorWidth, inputs.size() - idx); j < vectorWidth; ++j) {
+                            batch[j] = lastVal;
                         }
-                        
+
                         if (withGradient) {
-                            buffer->setVectorValue(diffInputNode, batch);
+                            buffer->setLanes(diffInputNode, batch);
                             buffer->clearGradients();
                         } else {
-                            buffer->setVectorValue(inputNode, batch);
+                            buffer->setLanes(inputNode, batch);
                         }
                         kernel->execute(*buffer);
                     }
                 } else {
                     // Scalar execution (SSE2)
                     for (double x : inputs) {
+                        double inputData[1] = {x};
                         if (withGradient) {
-                            buffer->setValue(diffInputNode, x);
+                            buffer->setLanes(diffInputNode, inputData);
                             buffer->clearGradients();
                         } else {
-                            buffer->setValue(inputNode, x);
+                            buffer->setLanes(inputNode, inputData);
                         }
                         kernel->execute(*buffer);
                     }
@@ -523,37 +525,47 @@ private:
         // Collect values/gradients from one execution
         values.clear();
         gradients.clear();
-        
+
         if (isVectorized) {
             // For AVX2: Process and collect in batches
             size_t vectorWidth = buffer->getVectorWidth();
             for (size_t idx = 0; idx < inputs.size(); idx += vectorWidth) {
                 // Create batch
-                std::vector<double> batch;
+                double batch[4] = {0, 0, 0, 0};
+                size_t batchSize = 0;
                 for (size_t j = 0; j < vectorWidth && (idx + j) < inputs.size(); ++j) {
-                    batch.push_back(inputs[idx + j]);
+                    batch[j] = inputs[idx + j];
+                    batchSize++;
                 }
                 // Pad with last value if needed
-                while (batch.size() < vectorWidth) {
-                    batch.push_back(batch.back());
+                double lastVal = (batchSize > 0) ? batch[batchSize - 1] : inputs.back();
+                for (size_t j = batchSize; j < vectorWidth; ++j) {
+                    batch[j] = lastVal;
                 }
-                
+
                 if (withGradient) {
-                    buffer->setVectorValue(diffInputNode, batch);
+                    buffer->setLanes(diffInputNode, batch);
                     buffer->clearGradients();
                 } else {
-                    buffer->setVectorValue(inputNode, batch);
+                    buffer->setLanes(inputNode, batch);
                 }
                 kernel->execute(*buffer);
-                
+
                 // Collect results from all lanes
-                auto vecResults = buffer->getVectorValue(outputNode);
+                double vecResults[4];
+                buffer->getLanes(outputNode, vecResults);
                 for (size_t j = 0; j < vectorWidth && (idx + j) < inputs.size(); ++j) {
                     values.push_back(vecResults[j]);
                 }
-                
+
                 if (withGradient) {
-                    auto vecGrads = buffer->getVectorGradient(diffInputNode);
+                    // Get gradients for all lanes
+                    size_t gradIdx = buffer->getBufferIndex(diffInputNode);
+                    double gradLane0[1], gradLane1[1], gradLane2[1], gradLane3[1];
+                    double* gradOutputs[4] = {gradLane0, gradLane1, gradLane2, gradLane3};
+                    std::vector<size_t> gradIndices = {gradIdx};
+                    buffer->getGradientLanes(gradIndices, gradOutputs);
+                    double vecGrads[4] = {gradLane0[0], gradLane1[0], gradLane2[0], gradLane3[0]};
                     for (size_t j = 0; j < vectorWidth && (idx + j) < inputs.size(); ++j) {
                         gradients.push_back(vecGrads[j]);
                     }
@@ -562,17 +574,25 @@ private:
         } else {
             // Scalar execution
             for (double x : inputs) {
+                double inputData[1] = {x};
                 if (withGradient) {
-                    buffer->setValue(diffInputNode, x);
+                    buffer->setLanes(diffInputNode, inputData);
                     buffer->clearGradients();
                 } else {
-                    buffer->setValue(inputNode, x);
+                    buffer->setLanes(inputNode, inputData);
                 }
                 kernel->execute(*buffer);
-                values.push_back(buffer->getValue(outputNode));
+                double outputData[1];
+                buffer->getLanes(outputNode, outputData);
+                values.push_back(outputData[0]);
                 if (withGradient) {
-                    double grad = buffer->getGradient(diffInputNode);
-                    gradients.push_back(grad);
+                    // Get gradient using getGradientLanes
+                    size_t gradIdx = buffer->getBufferIndex(diffInputNode);
+                    double gradLane0[1];
+                    double* gradOutputs[4] = {gradLane0, nullptr, nullptr, nullptr};
+                    std::vector<size_t> gradIndices = {gradIdx};
+                    buffer->getGradientLanes(gradIndices, gradOutputs);
+                    gradients.push_back(gradLane0[0]);
                 }
             }
         }
@@ -593,31 +613,35 @@ private:
                     size_t vectorWidth = buffer->getVectorWidth();
                     for (size_t idx = 0; idx < inputs.size(); idx += vectorWidth) {
                         // Create batch
-                        std::vector<double> batch;
+                        double batch[4] = {0, 0, 0, 0};
+                        size_t batchSize = 0;
                         for (size_t j = 0; j < vectorWidth && (idx + j) < inputs.size(); ++j) {
-                            batch.push_back(inputs[idx + j]);
+                            batch[j] = inputs[idx + j];
+                            batchSize++;
                         }
-                        while (batch.size() < vectorWidth) {
-                            batch.push_back(batch.back());
+                        double lastVal = (batchSize > 0) ? batch[batchSize - 1] : inputs.back();
+                        for (size_t j = batchSize; j < vectorWidth; ++j) {
+                            batch[j] = lastVal;
                         }
-                        
+
                         if (withGradient) {
-                            buffer->setVectorValue(diffInputNode, batch);
+                            buffer->setLanes(diffInputNode, batch);
                             buffer->clearGradients();
                             kernel->execute(*buffer);
                         } else {
-                            buffer->setVectorValue(inputNode, batch);
+                            buffer->setLanes(inputNode, batch);
                             kernel->execute(*buffer);
                         }
                     }
                 } else {
                     // Scalar execution
                     for (double x : inputs) {
+                        double inputData[1] = {x};
                         if (withGradient) {
                             // For gradient-enabled kernel:
                             // The kernel was compiled from a tape with gradient flags,
                             // so it computes BOTH forward and backward passes
-                            buffer->setValue(diffInputNode, x);
+                            buffer->setLanes(diffInputNode, inputData);
                             buffer->clearGradients();
                             kernel->execute(*buffer);
                             // After execution, both values and gradients are computed
@@ -625,7 +649,7 @@ private:
                             // For forward-only kernel:
                             // The kernel was compiled from a tape WITHOUT gradient flags,
                             // so it only computes the forward pass
-                            buffer->setValue(inputNode, x);
+                            buffer->setLanes(inputNode, inputData);
                             kernel->execute(*buffer);
                             // After execution, only values are computed (no gradients)
                         }
@@ -1147,14 +1171,11 @@ public:
                     
                     if (avx2BufferNonDiff->getVectorWidth() == 4) {
                         // Prepare batch of 4 inputs
-                        std::vector<double> batch(4);
-                        for (size_t i = 0; i < 4 && i < func.inputs.size(); ++i) {
-                            batch[i] = func.inputs[i];
+                        double batch[4];
+                        for (size_t i = 0; i < 4; ++i) {
+                            batch[i] = (i < func.inputs.size()) ? func.inputs[i] : func.inputs.back();
                         }
-                        while (batch.size() < 4) {
-                            batch.push_back(func.inputs.back());
-                        }
-                        
+
                         // Find input/output nodes
                         NodeId inputNode = 0;
                         NodeId diffInputNode = 0;
@@ -1167,16 +1188,16 @@ public:
                         if (!withDiffTape.diff_inputs.empty()) {
                             diffInputNode = withDiffTape.diff_inputs[0];
                         }
-                        
+
                         // Warmup and benchmark AVX2 forward-only
                         for (int i = 0; i < config_.warmupRuns; ++i) {
-                            avx2BufferNonDiff->setVectorValue(inputNode, batch);
+                            avx2BufferNonDiff->setLanes(inputNode, batch);
                             avx2KernelNonDiff->execute(*avx2BufferNonDiff);
                         }
-                        
+
                         auto avx2ForwardStart = std::chrono::high_resolution_clock::now();
                         for (size_t iter = 0; iter < config_.iterations; ++iter) {
-                            avx2BufferNonDiff->setVectorValue(inputNode, batch);
+                            avx2BufferNonDiff->setLanes(inputNode, batch);
                             avx2KernelNonDiff->execute(*avx2BufferNonDiff);
                         }
                         auto avx2ForwardEnd = std::chrono::high_resolution_clock::now();
@@ -1184,17 +1205,17 @@ public:
                         double avx2ForwardTotal4 = std::chrono::duration_cast<std::chrono::nanoseconds>(
                             avx2ForwardEnd - avx2ForwardStart).count() / config_.iterations;
                         result.avx2ForwardOnlyTime = avx2ForwardTotal4 / 4.0;
-                        
+
                         // Warmup and benchmark AVX2 forward+backward
                         for (int i = 0; i < config_.warmupRuns; ++i) {
-                            avx2BufferWithDiff->setVectorValue(diffInputNode, batch);
+                            avx2BufferWithDiff->setLanes(diffInputNode, batch);
                             avx2BufferWithDiff->clearGradients();
                             avx2KernelWithDiff->execute(*avx2BufferWithDiff);
                         }
-                        
+
                         auto avx2WithGradStart = std::chrono::high_resolution_clock::now();
                         for (size_t iter = 0; iter < config_.iterations; ++iter) {
-                            avx2BufferWithDiff->setVectorValue(diffInputNode, batch);
+                            avx2BufferWithDiff->setLanes(diffInputNode, batch);
                             avx2BufferWithDiff->clearGradients();
                             avx2KernelWithDiff->execute(*avx2BufferWithDiff);
                         }
