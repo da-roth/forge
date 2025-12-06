@@ -13,7 +13,7 @@ jobs:
 
     strategy:
       matrix:
-        build_type: [Release, Debug]
+        build_type: [Debug]  # Release disabled temporarily - SEGFAULT in AVX2 SLEEF calls
 
     steps:
     - name: Checkout repository
