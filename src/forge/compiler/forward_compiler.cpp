@@ -49,31 +49,19 @@ void ForwardCompiler::generateOperation(asmjit::x86::Assembler& a,
         }
         
         case OpCode::Constant: {
-            // Debug constant processing
-            if (nodeId == 3) {
-                std::cout << "[DEBUG] Processing Constant node 3, isActive=" << node.isActive 
-                          << ", isDead=" << node.isDead << ", value=" << node.imm << std::endl;
-            }
-            
             // Check if this constant was already processed by ensureInRegister
             if (processedConstants.count(nodeId) > 0) {
                 // Already processed, skip to avoid double-processing
-                if (nodeId == 3) {
-                    std::cout << "[DEBUG] Constant node 3 already processed, skipping" << std::endl;
-                }
                 break;
             }
-            
+
             // Check if this constant is already in a pinned register
             int existingReg = regState.findNodeInRegister(nodeId);
             if (existingReg >= 0) {
                 // Constant is already preloaded in a pinned register, nothing to do
-                if (nodeId == 3) {
-                    std::cout << "[DEBUG] Constant node 3 already in register " << existingReg << std::endl;
-                }
                 break;
             }
-            
+
             // Phase 2.2: Load from constant pool via RIP-relative addressing
             auto it = constantMap.find(nodeId);
             if (it != constantMap.end()) {
@@ -86,15 +74,12 @@ void ForwardCompiler::generateOperation(asmjit::x86::Assembler& a,
                     // Use instruction set to load from constant pool
                     instructionSet_->emitLoadFromConstantPool(a, regIdx, constPoolLabel, it->second.poolOffset);
                 }
-                
+
                 // Mark register as containing this node and store immediately
                 regState.setRegister(regIdx, nodeId, false);
-                
-                if (nodeId == 3) {
-                    std::cout << "[DEBUG] Storing constant node 3 to memory from register " << regIdx << std::endl;
-                }
+
                 instructionSet_->emitOptimizedStore(a, regIdx, nodeId);
-                
+
                 // Mark as processed
                 processedConstants.insert(nodeId);
             }
