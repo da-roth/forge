@@ -126,8 +126,9 @@ private:
     // Instruction set implementation (based on config)
     std::unique_ptr<IInstructionSet> instructionSet_;
     
-    // Note: JitRuntime is accessed via getRuntime() which uses a Meyer's singleton
-    // This avoids static initialization order issues on Windows
+    // Shared JitRuntime for all compilers - long-lived per Design v3
+    // This ensures executable memory remains valid after compiler destruction
+    static asmjit::JitRuntime s_runtime;
     
     // Phase 2.3: Register tracking for optimization
     // Now creates appropriate allocator based on instruction set

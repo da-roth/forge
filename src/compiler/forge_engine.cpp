@@ -57,7 +57,8 @@ static constexpr bool ENABLE_FUSION_BLOCKS = false;
 // Maximum block size when fusion blocks are enabled
 static constexpr int FUSION_BLOCK_SIZE = 15;  // Operations per block
 
-// JitRuntime is now a Meyer's singleton - see getRuntime()
+// Define the static JitRuntime (shared across all compilers)
+asmjit::JitRuntime ForgeEngine::s_runtime;
 
 ForgeEngine::ForgeEngine() : config_(CompilerConfig::Default()) {
     // Create instruction set based on config - MUST pass the full config!
@@ -72,9 +73,6 @@ ForgeEngine::ForgeEngine(const CompilerConfig& config) : config_(config) {
 ForgeEngine::~ForgeEngine() = default;
 
 asmjit::JitRuntime& ForgeEngine::getRuntime() {
-    // Meyer's singleton - constructed on first use, avoids static initialization order issues
-    // This is especially important on Windows where static destruction order can cause crashes
-    static asmjit::JitRuntime s_runtime;
     return s_runtime;
 }
 
