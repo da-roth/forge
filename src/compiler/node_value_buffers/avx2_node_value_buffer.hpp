@@ -69,26 +69,30 @@ public:
             totalDoubles = vector_width_;  // At least one YMM register worth
         }
 
+        // Calculate allocation size - must be multiple of alignment for aligned_alloc on Linux
+        size_t allocSize = totalDoubles * sizeof(double);
+        size_t alignedAllocSize = (allocSize + 31) & ~size_t(31);  // Round up to multiple of 32
+
         // Platform-specific aligned allocation
 #ifdef _WIN32
-        values_ = static_cast<double*>(_aligned_malloc(totalDoubles * sizeof(double), 32));  // 32-byte alignment for AVX2
+        values_ = static_cast<double*>(_aligned_malloc(allocSize, 32));  // 32-byte alignment for AVX2
 #else
-        values_ = static_cast<double*>(aligned_alloc(32, totalDoubles * sizeof(double)));
+        values_ = static_cast<double*>(aligned_alloc(32, alignedAllocSize));
 #endif
         if (!values_) {
             throw std::bad_alloc();
         }
-        std::memset(values_, 0, totalDoubles * sizeof(double));
+        std::memset(values_, 0, allocSize);
 
         // Allocate gradients if needed (also 4 doubles per node)
         if (!diff_inputs_.empty()) {
 #ifdef _WIN32
-            gradients_ = static_cast<double*>(_aligned_malloc(totalDoubles * sizeof(double), 32));
+            gradients_ = static_cast<double*>(_aligned_malloc(allocSize, 32));
 #else
-            gradients_ = static_cast<double*>(aligned_alloc(32, totalDoubles * sizeof(double)));
+            gradients_ = static_cast<double*>(aligned_alloc(32, alignedAllocSize));
 #endif
             if (gradients_) {
-                std::memset(gradients_, 0, totalDoubles * sizeof(double));
+                std::memset(gradients_, 0, allocSize);
             }
         }
     }
@@ -111,23 +115,27 @@ public:
             totalDoubles = vector_width_;  // At least one YMM register worth
         }
 
+        // Calculate allocation size - must be multiple of alignment for aligned_alloc on Linux
+        size_t allocSize = totalDoubles * sizeof(double);
+        size_t alignedAllocSize = (allocSize + 31) & ~size_t(31);  // Round up to multiple of 32
+
         // Platform-specific aligned allocation
 #ifdef _WIN32
-        values_ = static_cast<double*>(_aligned_malloc(totalDoubles * sizeof(double), 32));  // 32-byte alignment for AVX2
+        values_ = static_cast<double*>(_aligned_malloc(allocSize, 32));  // 32-byte alignment for AVX2
 #else
-        values_ = static_cast<double*>(aligned_alloc(32, totalDoubles * sizeof(double)));
+        values_ = static_cast<double*>(aligned_alloc(32, alignedAllocSize));
 #endif
         if (!values_) {
             throw std::bad_alloc();
         }
-        std::memset(values_, 0, totalDoubles * sizeof(double));
+        std::memset(values_, 0, allocSize);
 
         // Allocate gradients if needed (also 4 doubles per node)
         if (!tape.diff_inputs.empty()) {
 #ifdef _WIN32
-            gradients_ = static_cast<double*>(_aligned_malloc(totalDoubles * sizeof(double), 32));
+            gradients_ = static_cast<double*>(_aligned_malloc(allocSize, 32));
 #else
-            gradients_ = static_cast<double*>(aligned_alloc(32, totalDoubles * sizeof(double)));
+            gradients_ = static_cast<double*>(aligned_alloc(32, alignedAllocSize));
 #endif
             if (!gradients_) {
 #ifdef _WIN32
@@ -137,7 +145,7 @@ public:
 #endif
                 throw std::bad_alloc();
             }
-            std::memset(gradients_, 0, totalDoubles * sizeof(double));
+            std::memset(gradients_, 0, allocSize);
         } else {
             gradients_ = nullptr;
         }
@@ -191,26 +199,30 @@ public:
             totalDoubles = vector_width_;  // At least one YMM register worth
         }
 
+        // Calculate allocation size - must be multiple of alignment for aligned_alloc on Linux
+        size_t allocSize = totalDoubles * sizeof(double);
+        size_t alignedAllocSize = (allocSize + 31) & ~size_t(31);  // Round up to multiple of 32
+
         // Platform-specific aligned allocation
 #ifdef _WIN32
-        values_ = static_cast<double*>(_aligned_malloc(totalDoubles * sizeof(double), 32));  // 32-byte alignment for AVX2
+        values_ = static_cast<double*>(_aligned_malloc(allocSize, 32));  // 32-byte alignment for AVX2
 #else
-        values_ = static_cast<double*>(aligned_alloc(32, totalDoubles * sizeof(double)));
+        values_ = static_cast<double*>(aligned_alloc(32, alignedAllocSize));
 #endif
         if (!values_) {
             throw std::bad_alloc();
         }
-        std::memset(values_, 0, totalDoubles * sizeof(double));
+        std::memset(values_, 0, allocSize);
 
         // Allocate gradients if needed (also 4 doubles per node)
         if (!diff_inputs_.empty()) {
 #ifdef _WIN32
-            gradients_ = static_cast<double*>(_aligned_malloc(totalDoubles * sizeof(double), 32));
+            gradients_ = static_cast<double*>(_aligned_malloc(allocSize, 32));
 #else
-            gradients_ = static_cast<double*>(aligned_alloc(32, totalDoubles * sizeof(double)));
+            gradients_ = static_cast<double*>(aligned_alloc(32, alignedAllocSize));
 #endif
             if (gradients_) {
-                std::memset(gradients_, 0, totalDoubles * sizeof(double));
+                std::memset(gradients_, 0, allocSize);
             }
         }
     }

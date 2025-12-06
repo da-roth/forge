@@ -40,25 +40,29 @@ public:
             totalDoubles = 1;  // At least one double
         }
 
+        // Calculate allocation size - must be multiple of alignment for aligned_alloc on Linux
+        size_t allocSize = totalDoubles * sizeof(double);
+        size_t alignedAllocSize = (allocSize + 63) & ~size_t(63);  // Round up to multiple of 64
+
         // Platform-specific aligned allocation
 #ifdef _WIN32
-        values_ = static_cast<double*>(_aligned_malloc(totalDoubles * sizeof(double), 64));
+        values_ = static_cast<double*>(_aligned_malloc(allocSize, 64));
 #else
-        values_ = static_cast<double*>(aligned_alloc(64, totalDoubles * sizeof(double)));
+        values_ = static_cast<double*>(aligned_alloc(64, alignedAllocSize));
 #endif
         if (!values_) {
             throw std::bad_alloc();
         }
-        std::memset(values_, 0, totalDoubles * sizeof(double));
+        std::memset(values_, 0, allocSize);
 
         // Allocate gradients if needed
         if (!diff_inputs_.empty()) {
 #ifdef _WIN32
-            gradients_ = static_cast<double*>(_aligned_malloc(totalDoubles * sizeof(double), 64));
+            gradients_ = static_cast<double*>(_aligned_malloc(allocSize, 64));
 #else
-            gradients_ = static_cast<double*>(aligned_alloc(64, totalDoubles * sizeof(double)));
+            gradients_ = static_cast<double*>(aligned_alloc(64, alignedAllocSize));
 #endif
-            std::memset(gradients_, 0, totalDoubles * sizeof(double));
+            std::memset(gradients_, 0, allocSize);
         }
     }
 
@@ -78,25 +82,29 @@ public:
             totalDoubles = 1;  // At least one double
         }
 
+        // Calculate allocation size - must be multiple of alignment for aligned_alloc on Linux
+        size_t allocSize = totalDoubles * sizeof(double);
+        size_t alignedAllocSize = (allocSize + 63) & ~size_t(63);  // Round up to multiple of 64
+
         // Platform-specific aligned allocation
 #ifdef _WIN32
-        values_ = static_cast<double*>(_aligned_malloc(totalDoubles * sizeof(double), 64));
+        values_ = static_cast<double*>(_aligned_malloc(allocSize, 64));
 #else
-        values_ = static_cast<double*>(aligned_alloc(64, totalDoubles * sizeof(double)));
+        values_ = static_cast<double*>(aligned_alloc(64, alignedAllocSize));
 #endif
         if (!values_) {
             throw std::bad_alloc();
         }
-        std::memset(values_, 0, totalDoubles * sizeof(double));
+        std::memset(values_, 0, allocSize);
 
         // Allocate gradients if needed
         if (!diff_inputs_.empty()) {
 #ifdef _WIN32
-            gradients_ = static_cast<double*>(_aligned_malloc(totalDoubles * sizeof(double), 64));
+            gradients_ = static_cast<double*>(_aligned_malloc(allocSize, 64));
 #else
-            gradients_ = static_cast<double*>(aligned_alloc(64, totalDoubles * sizeof(double)));
+            gradients_ = static_cast<double*>(aligned_alloc(64, alignedAllocSize));
 #endif
-            std::memset(gradients_, 0, totalDoubles * sizeof(double));
+            std::memset(gradients_, 0, allocSize);
         }
     }
 

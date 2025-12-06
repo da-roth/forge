@@ -171,15 +171,21 @@ class StitchedKernel {
 public:
     /** @brief Function signature for compiled kernels */
     using KernelFunc = void(*)(double* values, double* gradients, size_t count);
-    
+
     StitchedKernel(KernelFunc func, asmjit::JitRuntime& runtime, size_t num_nodes, const IInstructionSet* instructionSet, const CompilerConfig& config, size_t max_node_id = 0, size_t working_nodes = 0)
-        : func_(func), runtime_(&runtime), num_nodes_(num_nodes), instructionSet_(instructionSet), config_(config), max_node_id_(max_node_id), working_nodes_(working_nodes > 0 ? working_nodes : num_nodes) {}
-    
+        : func_(func), runtime_(&runtime), num_nodes_(num_nodes),
+          vector_width_(instructionSet->getVectorWidth()),
+          instruction_set_name_(instructionSet->getName()),
+          config_(config), max_node_id_(max_node_id), working_nodes_(working_nodes > 0 ? working_nodes : num_nodes) {}
+
     // Constructor with node ID mapping
     StitchedKernel(KernelFunc func, asmjit::JitRuntime& runtime, size_t num_nodes, const IInstructionSet* instructionSet, const CompilerConfig& config,
                    const std::vector<forge::NodeId>& originalToOptimizedMapping, size_t max_node_id = 0, size_t working_nodes = 0,
                    const std::vector<forge::NodeId>& outputNodes = {})
-        : func_(func), runtime_(&runtime), num_nodes_(num_nodes), instructionSet_(instructionSet), config_(config),
+        : func_(func), runtime_(&runtime), num_nodes_(num_nodes),
+          vector_width_(instructionSet->getVectorWidth()),
+          instruction_set_name_(instructionSet->getName()),
+          config_(config),
           max_node_id_(max_node_id), working_nodes_(working_nodes > 0 ? working_nodes : num_nodes),
           originalToOptimizedMapping_(originalToOptimizedMapping), outputNodes_(outputNodes) {
         // std::cout << "[KERNEL CONSTRUCTOR] num_nodes=" << num_nodes_
@@ -227,10 +233,10 @@ public:
         // Show kernel configuration on first call only (debug mode only)
         static bool firstCall = true;
         if (firstCall) {
-            int vw = instructionSet_->getVectorWidth();
+            int vw = vector_width_;
             size_t bytesPerNode = vw * sizeof(double);
             size_t totalBufferBytes = buffer.getNumNodes() * bytesPerNode;
-            std::cout << "[KERNEL] Configuration: " << instructionSet_->getName()
+            std::cout << "[KERNEL] Configuration: " << instruction_set_name_
                       << " (width=" << vw << ", " << bytesPerNode << " bytes/node, "
                       << "buffer=" << totalBufferBytes << " bytes for " << buffer.getNumNodes() << " nodes)" << std::endl;
             firstCall = false;
@@ -258,14 +264,14 @@ public:
             // Show output value from first output node (for debugging)
             if (!outputNodes_.empty() && buffer.getNumNodes() > 0) {
                 forge::NodeId outputNode = outputNodes_[0];
-                double outputValue = values[outputNode * instructionSet_->getVectorWidth()];
+                double outputValue = values[outputNode * vector_width_];
                 /*std::cout << "[KERNEL] Execution completed in " << std::fixed << std::setprecision(3) << execTimeUs
                           << " μs. Output node " << outputNode << " value: "
                           << std::fixed << std::setprecision(17) << outputValue << std::endl;*/
             } else if (buffer.getNumNodes() > 0) {
                 // Fallback to last node if no output nodes specified
                 size_t lastNode = buffer.getNumNodes() - 1;
-                double outputValue = values[lastNode * instructionSet_->getVectorWidth()];
+                double outputValue = values[lastNode * vector_width_];
                 /*std::cout << "[KERNEL] Execution completed in " << std::fixed << std::setprecision(3) << execTimeUs
                           << " μs. Last node value: "
                           << std::fixed << std::setprecision(17) << outputValue << std::endl;*/
@@ -281,7 +287,7 @@ public:
             if (tracingEnabled) {
                 // std::cout << "[KERNEL] ==> ENTERING TRACE PRINT BLOCK" << std::endl;
                 // std::cout << "[TRACE] Starting runtime trace records print..." << std::endl;
-                // std::cout << "[TRACE] Instruction set: " << instructionSet_->getName() << std::endl;
+                // std::cout << "[TRACE] Instruction set: " << instruction_set_name_ << std::endl;
                 // std::cout << "[TRACE] Trace buffer enabled: " << (forge::g_traceBuffer.enabled ? "yes" : "no") << std::endl;
                 // std::cout << "[TRACE] Records captured: " << forge::g_traceBuffer.index.load() << std::endl;
 
@@ -321,13 +327,13 @@ public:
      * @brief Get SIMD vector width of this kernel
      * @return Number of doubles processed per operation (1 for scalar, 4 for AVX2)
      */
-    int getVectorWidth() const { return instructionSet_->getVectorWidth(); }
+    int getVectorWidth() const { return vector_width_; }
 
     /**
      * @brief Get instruction set name used by this kernel
      * @return Name string (e.g., "SSE2-Scalar", "AVX2-Packed")
      */
-    std::string getInstructionSetName() const { return instructionSet_->getName(); }
+    std::string getInstructionSetName() const { return instruction_set_name_; }
 
     /**
      * @brief Get maximum node ID accessed by this kernel
@@ -358,22 +364,25 @@ public:
     // Enable move
     StitchedKernel(StitchedKernel&& other) noexcept
         : func_(other.func_), runtime_(other.runtime_), num_nodes_(other.num_nodes_),
-          instructionSet_(other.instructionSet_), config_(other.config_),
+          vector_width_(other.vector_width_),
+          instruction_set_name_(std::move(other.instruction_set_name_)),
+          config_(other.config_),
           max_node_id_(other.max_node_id_), working_nodes_(other.working_nodes_),
           originalToOptimizedMapping_(std::move(other.originalToOptimizedMapping_)),
           outputNodes_(std::move(other.outputNodes_)) {
         other.func_ = nullptr;
         other.runtime_ = nullptr;
-        other.instructionSet_ = nullptr;
+        other.vector_width_ = 0;
         other.max_node_id_ = 0;
         other.working_nodes_ = 0;
     }
-    
+
 private:
     KernelFunc func_;
     asmjit::JitRuntime* runtime_;  // Points to shared static runtime
     size_t num_nodes_;              // Original graph size (for buffer compatibility)
-    const IInstructionSet* instructionSet_;  // Instruction set used for compilation
+    int vector_width_;              // SIMD vector width (1 for scalar, 4 for AVX2)
+    std::string instruction_set_name_;  // Name of instruction set used
     CompilerConfig config_;         // Compiler configuration
     size_t max_node_id_;           // Maximum node ID accessed during compilation
     size_t working_nodes_;         // Working graph size (after optimizations)
