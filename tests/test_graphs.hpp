@@ -910,6 +910,185 @@ inline std::vector<TestGraph> createTestGraphsWithGradient() {
         graphs.push_back(std::move(tg));
     }
 
+    // Sub: z = x + y, output = z - c, gradient w.r.t x = 1
+    {
+        TestGraph tg;
+        tg.name = "Sub: (x+y)-3 (grad=1)";
+        tg.hasGradient = true;
+        tg.numInputs = 2;
+        tg.numOutputs = 1;
+
+        forge::NodeId x = tg.graph.addInput();
+        forge::NodeId y = tg.graph.addInput();
+        tg.inputIds = {x, y};
+
+        tg.graph.diff_inputs.push_back(x);
+        tg.graph.nodes[x].needsGradient = true;
+
+        forge::NodeId z = addBinaryOp(tg.graph, forge::OpCode::Add, x, y, true);
+        forge::NodeId c = tg.graph.addConstant(3.0);
+        tg.outputId = addBinaryOp(tg.graph, forge::OpCode::Sub, z, c, true);
+        tg.graph.markOutput(tg.outputId);
+
+        // d/dx[(x+y)-3] = 1
+        tg.testCases = {
+            {{2.0, 3.0}, 2.0, 1.0},
+            {{5.0, 1.0}, 3.0, 1.0},
+            {{0.0, 0.0}, -3.0, 1.0},
+            {{-1.0, -2.0}, -6.0, 1.0}
+        };
+        graphs.push_back(std::move(tg));
+    }
+
+    // Div: z = x + y, output = z / c, gradient w.r.t x = 1/c = 0.5
+    {
+        TestGraph tg;
+        tg.name = "Div: (x+y)/2 (grad=0.5)";
+        tg.hasGradient = true;
+        tg.numInputs = 2;
+        tg.numOutputs = 1;
+
+        forge::NodeId x = tg.graph.addInput();
+        forge::NodeId y = tg.graph.addInput();
+        tg.inputIds = {x, y};
+
+        tg.graph.diff_inputs.push_back(x);
+        tg.graph.nodes[x].needsGradient = true;
+
+        forge::NodeId z = addBinaryOp(tg.graph, forge::OpCode::Add, x, y, true);
+        forge::NodeId c = tg.graph.addConstant(2.0);
+        tg.outputId = addBinaryOp(tg.graph, forge::OpCode::Div, z, c, true);
+        tg.graph.markOutput(tg.outputId);
+
+        // d/dx[(x+y)/2] = 1/2 = 0.5
+        tg.testCases = {
+            {{4.0, 2.0}, 3.0, 0.5},
+            {{10.0, 0.0}, 5.0, 0.5},
+            {{1.0, 1.0}, 1.0, 0.5},
+            {{-2.0, 6.0}, 2.0, 0.5}
+        };
+        graphs.push_back(std::move(tg));
+    }
+
+    // Neg: z = x + y, output = -z, gradient w.r.t x = -1
+    {
+        TestGraph tg;
+        tg.name = "Neg: -(x+y) (grad=-1)";
+        tg.hasGradient = true;
+        tg.numInputs = 2;
+        tg.numOutputs = 1;
+
+        forge::NodeId x = tg.graph.addInput();
+        forge::NodeId y = tg.graph.addInput();
+        tg.inputIds = {x, y};
+
+        tg.graph.diff_inputs.push_back(x);
+        tg.graph.nodes[x].needsGradient = true;
+
+        forge::NodeId z = addBinaryOp(tg.graph, forge::OpCode::Add, x, y, true);
+        tg.outputId = addUnaryOp(tg.graph, forge::OpCode::Neg, z, true);
+        tg.graph.markOutput(tg.outputId);
+
+        // d/dx[-(x+y)] = -1
+        tg.testCases = {
+            {{2.0, 3.0}, -5.0, -1.0},
+            {{-1.0, -2.0}, 3.0, -1.0},
+            {{0.0, 0.0}, 0.0, -1.0},
+            {{5.0, -5.0}, 0.0, -1.0}
+        };
+        graphs.push_back(std::move(tg));
+    }
+
+    // Recip: z = x + y, output = 1/z, gradient w.r.t x = -1/z^2
+    {
+        TestGraph tg;
+        tg.name = "Recip: 1/(x+y) (grad=-1/(x+y)^2)";
+        tg.hasGradient = true;
+        tg.numInputs = 2;
+        tg.numOutputs = 1;
+
+        forge::NodeId x = tg.graph.addInput();
+        forge::NodeId y = tg.graph.addInput();
+        tg.inputIds = {x, y};
+
+        tg.graph.diff_inputs.push_back(x);
+        tg.graph.nodes[x].needsGradient = true;
+
+        forge::NodeId z = addBinaryOp(tg.graph, forge::OpCode::Add, x, y, true);
+        tg.outputId = addUnaryOp(tg.graph, forge::OpCode::Recip, z, true);
+        tg.graph.markOutput(tg.outputId);
+
+        // d/dx[1/(x+y)] = -1/(x+y)^2
+        tg.testCases = {
+            {{1.0, 1.0}, 0.5, -0.25},     // 1/2=0.5, grad=-1/4=-0.25
+            {{4.0, 1.0}, 0.2, -0.04},     // 1/5=0.2, grad=-1/25=-0.04
+            {{0.5, 0.5}, 1.0, -1.0},      // 1/1=1, grad=-1/1=-1
+            {{2.0, 2.0}, 0.25, -0.0625}   // 1/4=0.25, grad=-1/16=-0.0625
+        };
+        graphs.push_back(std::move(tg));
+    }
+
+    // Tan: z = x + y, output = tan(z), gradient w.r.t x = 1/cos^2(z) = sec^2(z)
+    {
+        TestGraph tg;
+        tg.name = "Tan: tan(x+y) (grad=sec^2(x+y))";
+        tg.hasGradient = true;
+        tg.numInputs = 2;
+        tg.numOutputs = 1;
+
+        forge::NodeId x = tg.graph.addInput();
+        forge::NodeId y = tg.graph.addInput();
+        tg.inputIds = {x, y};
+
+        tg.graph.diff_inputs.push_back(x);
+        tg.graph.nodes[x].needsGradient = true;
+
+        forge::NodeId z = addBinaryOp(tg.graph, forge::OpCode::Add, x, y, true);
+        tg.outputId = addUnaryOp(tg.graph, forge::OpCode::Tan, z, true);
+        tg.graph.markOutput(tg.outputId);
+
+        const double pi = 3.14159265358979323846;
+        // d/dx[tan(x+y)] = sec^2(x+y) = 1/cos^2(x+y)
+        auto sec2 = [](double x) { double c = std::cos(x); return 1.0/(c*c); };
+        tg.testCases = {
+            {{0.0, 0.0}, 0.0, 1.0},                          // tan(0)=0, sec^2(0)=1
+            {{pi/4, 0.0}, std::tan(pi/4), sec2(pi/4)},       // tan(pi/4)~1, sec^2(pi/4)=2
+            {{pi/6, 0.0}, std::tan(pi/6), sec2(pi/6)},       // tan(pi/6)
+            {{-pi/4, 0.0}, std::tan(-pi/4), sec2(-pi/4)}     // tan(-pi/4)~-1
+        };
+        graphs.push_back(std::move(tg));
+    }
+
+    // Pow: z = x + y, output = z^u, gradient w.r.t x = u * z^(u-1)
+    {
+        TestGraph tg;
+        tg.name = "Pow: (x+y)^u (grad=u*(x+y)^(u-1))";
+        tg.hasGradient = true;
+        tg.numInputs = 3;
+        tg.numOutputs = 1;
+
+        forge::NodeId x = tg.graph.addInput();
+        forge::NodeId y = tg.graph.addInput();
+        forge::NodeId u = tg.graph.addInput();
+        tg.inputIds = {x, y, u};
+
+        tg.graph.diff_inputs.push_back(x);
+        tg.graph.nodes[x].needsGradient = true;
+
+        forge::NodeId z = addBinaryOp(tg.graph, forge::OpCode::Add, x, y, true);
+        tg.outputId = addBinaryOp(tg.graph, forge::OpCode::Pow, z, u, true);
+        tg.graph.markOutput(tg.outputId);
+
+        // d/dx[(x+y)^u] = u * (x+y)^(u-1)
+        tg.testCases = {
+            {{2.0, 1.0, 2.0}, 9.0, 6.0},     // (3)^2=9, grad=2*3^1=6
+            {{1.0, 1.0, 3.0}, 8.0, 12.0},    // (2)^3=8, grad=3*2^2=12
+            {{3.0, 1.0, 0.5}, 2.0, 0.25},    // (4)^0.5=2, grad=0.5*4^(-0.5)=0.5*0.5=0.25
+            {{2.0, 2.0, 1.0}, 4.0, 1.0}      // (4)^1=4, grad=1*4^0=1
+        };
+        graphs.push_back(std::move(tg));
+    }
+
     return graphs;
 }
 
