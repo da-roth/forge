@@ -175,10 +175,8 @@ add_library(forge STATIC
     src/graph/optimizations/algebraic_simplification.hpp
     src/graph/optimizations/stability_cleaning.cpp
     src/graph/optimizations/stability_cleaning.hpp
-    src/graph/optimizations/placeholder_optimization.cpp
     src/graph/optimizations/constant_cleanup.cpp
     src/graph/optimizations/constant_cleanup.hpp
-    src/graph/optimizations/placeholder_optimization.hpp
     src/graph/optimizations/optimizations.hpp
 )
 
