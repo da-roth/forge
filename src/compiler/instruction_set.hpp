@@ -79,18 +79,10 @@ public:
     virtual void emitDiv(asmjit::x86::Assembler& a, int dstReg, int srcReg) = 0;
     ///@}
 
-    ///@{ @name Three-operand arithmetic (dst = src1 op src2, non-destructive)
-    virtual void emitAdd3(asmjit::x86::Assembler& a, int dstReg, int src1Reg, int src2Reg) = 0;
-    virtual void emitSub3(asmjit::x86::Assembler& a, int dstReg, int src1Reg, int src2Reg) = 0;
-    virtual void emitMul3(asmjit::x86::Assembler& a, int dstReg, int src1Reg, int src2Reg) = 0;
-    virtual void emitDiv3(asmjit::x86::Assembler& a, int dstReg, int src1Reg, int src2Reg) = 0;
-    ///@}
-
     ///@{ @name Unary operations (in-place modification)
-    virtual void emitNeg(asmjit::x86::Assembler& a, int dstReg) = 0;
-    virtual void emitAbs(asmjit::x86::Assembler& a, int dstReg) = 0;
+    virtual void emitNeg(asmjit::x86::Assembler& a, int dstReg, int tempReg) = 0;
+    virtual void emitAbs(asmjit::x86::Assembler& a, int dstReg, int tempReg) = 0;
     virtual void emitSqrt(asmjit::x86::Assembler& a, int dstReg) = 0;
-    virtual void emitRecip(asmjit::x86::Assembler& a, int dstReg) = 0;  ///< Reciprocal: 1/x
     virtual void emitSquare(asmjit::x86::Assembler& a, int dstReg) = 0;  ///< Square: x*x
     ///@}
 
@@ -112,9 +104,6 @@ public:
     virtual void emitCmpEQ(asmjit::x86::Assembler& a, int dstReg, int lhsReg, int rhsReg, IRegisterAllocator& regState) = 0;
     virtual void emitCmpNE(asmjit::x86::Assembler& a, int dstReg, int lhsReg, int rhsReg, IRegisterAllocator& regState) = 0;
     ///@}
-
-    /** @brief Convert boolean value (0.0/1.0) to all-zeros or all-ones bit mask */
-    virtual void emitCreateMaskFromBool(asmjit::x86::Assembler& a, int dstReg, int srcReg) = 0;
 
     ///@{ @name Min/Max operations
     virtual void emitMin(asmjit::x86::Assembler& a, int dstReg, int srcReg) = 0;
@@ -168,9 +157,6 @@ public:
 
     /** @brief Integer conditional: dst = (int)cond ? (int)trueVal : (int)falseVal */
     virtual void emitIntIf(asmjit::x86::Assembler& a, int dstReg, int condReg, int trueReg, int falseReg, IRegisterAllocator& regState) = 0;
-
-    /** @brief Blend operation: dst = mask ? src : dst */
-    virtual void emitBlend(asmjit::x86::Assembler& a, int dstReg, int srcReg, int maskReg) = 0;
 
     /** @brief Set register to zero */
     virtual void emitZero(asmjit::x86::Assembler& a, int dstReg) = 0;

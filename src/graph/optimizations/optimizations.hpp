@@ -5,7 +5,6 @@
 #include "common_subexpression_elimination.hpp"
 #include "algebraic_simplification.hpp"
 #include "stability_cleaning.hpp"
-#include "placeholder_optimization.hpp"
 #include "constant_cleanup.hpp"
 
 namespace forge {

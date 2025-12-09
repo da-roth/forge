@@ -32,34 +32,7 @@ forge::Graph ConstantCleanup::apply(const forge::Graph& graph,
     // Process nodes in original order to maintain dependency order by construction
     for (forge::NodeId oldId = 0; oldId < graph.nodes.size(); ++oldId) {
         const auto& node = graph.nodes[oldId];
-        
-        // Skip if this node is already processed (dead)
-        if (oldToNew[oldId] != UINT32_MAX) {
-            continue;
-        }
-        
-        // Skip dead nodes
-        if (node.isDead) {
-            // For dead nodes, we still need to add them to maintain order
-            forge::Node newNode = node;
-            
-            // Remap references to new node IDs
-            if (node.a != UINT32_MAX && oldToNew[node.a] != UINT32_MAX) {
-                newNode.a = oldToNew[node.a];
-            }
-            if (node.b != UINT32_MAX && oldToNew[node.b] != UINT32_MAX) {
-                newNode.b = oldToNew[node.b];
-            }
-            if (node.c != UINT32_MAX && oldToNew[node.c] != UINT32_MAX) {
-                newNode.c = oldToNew[node.c];
-            }
-            
-            forge::NodeId newId = result.addNode(newNode);
-            oldToNew[oldId] = newId;
-            continue;
-        }
-        
-        // Process active nodes
+
         forge::Node newNode = node;
         
         // Remap references to new node IDs
@@ -73,16 +46,10 @@ forge::Graph ConstantCleanup::apply(const forge::Graph& graph,
             newNode.c = oldToNew[node.c];
         }
         
-        // Update constant references
+        // Update constant references to use new indices in compacted const pool
         if (node.op == forge::OpCode::Constant) {
             size_t oldConstIndex = static_cast<size_t>(node.imm);
-            if (oldConstIndex < constMapping.size() && constMapping[oldConstIndex] != UINT32_MAX) {
-                newNode.imm = static_cast<double>(constMapping[oldConstIndex]);
-            } else {
-                // This constant is unused, but we still need to add the node
-                // It will be marked as dead or we can replace it with 0
-                newNode.imm = 0.0;  // Replace with 0 for unused constants
-            }
+            newNode.imm = static_cast<double>(constMapping[oldConstIndex]);
         }
         
         forge::NodeId newId = result.addNode(newNode);

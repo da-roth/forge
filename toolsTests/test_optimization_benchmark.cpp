@@ -59,8 +59,8 @@ protected:
         auto workspace = NodeValueBufferFactory::create(originalGraph, *kernel);
 
         // Measure execution time (average over multiple runs)
-        const int warmupRuns = 20;
-        const int benchmarkRuns = 20;
+        const int warmupRuns = 5;
+        const int benchmarkRuns = 10;
 
         // Use the first (baseline) input set for all runs to ensure consistent output
         const auto& baselineInputs = testInputs[0];

@@ -67,8 +67,8 @@ struct ComprehensiveBenchmarkResult {
 
 // Configuration for the benchmark runner (internal use)
 struct BenchmarkConfig {
-    int warmupIterations = 100;
-    int benchmarkIterations = 1000;
+    int warmupIterations = 5;
+    int benchmarkIterations = 10;
     bool verifyResults = true;
     double tolerance = 1e-10;
     bool testAvx2 = true;  // Test AVX2 in addition to SSE2

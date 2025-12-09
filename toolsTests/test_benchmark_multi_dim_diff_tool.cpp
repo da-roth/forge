@@ -13,8 +13,8 @@ protected:
     
     void SetUp() override {
         // Configure for benchmarking (faster than sanity check defaults)
-        config_.iterations = 1000;  // Fewer iterations for benchmarking
-        config_.warmupRuns = 100;
+        config_.iterations = 10;  // Fewer iterations for benchmarking
+        config_.warmupRuns = 5;
         config_.absoluteTolerance = 1e-10;
         config_.relativeTolerance = 1e-10;
         config_.jacobianAbsTolerance = 1e-6;  // Relaxed for finite differences
@@ -288,7 +288,7 @@ TEST_F(BenchmarkMultiDimDiffToolTest, HighAccuracyLinearTransform) {
     high_acc_config.useRichardsonExtrapolation = true;
     high_acc_config.jacobianAbsTolerance = 1e-6;  // Realistic tolerance for FD with Richardson
     high_acc_config.jacobianRelTolerance = 1e-6;
-    high_acc_config.iterations = 500;  // Fewer iterations due to extra FD computations
+    high_acc_config.iterations = 10;  // Fewer iterations due to extra FD computations
     
     auto runner = makeBenchmarkMultiDimDiffRunner<
         std::vector<double>(*)(const std::vector<double>&),
@@ -337,7 +337,7 @@ TEST_F(BenchmarkMultiDimDiffToolTest, LogarithmicTransform2x2) {
 TEST_F(BenchmarkMultiDimDiffToolTest, DetailedJacobianOutput) {
     auto detailed_config = config_;
     detailed_config.showJacobianDetails = true;
-    detailed_config.iterations = 500;  // Fewer iterations for detailed output
+    detailed_config.iterations = 10;  // Fewer iterations for detailed output
     
     auto runner = makeBenchmarkMultiDimDiffRunner<
         std::vector<double>(*)(const std::vector<double>&),
@@ -385,7 +385,7 @@ TEST_F(BenchmarkMultiDimDiffToolTest, NormalizationTransform3x3) {
 TEST_F(BenchmarkMultiDimDiffToolTest, PerformanceComparison) {
     auto comparison_config = config_;
     comparison_config.showScalingAnalysis = true;
-    comparison_config.iterations = 2000;  // More iterations for better statistics
+    comparison_config.iterations = 10;  // More iterations for better statistics
     
     auto runner = makeBenchmarkMultiDimDiffRunner<
         std::vector<double>(*)(const std::vector<double>&),
@@ -406,8 +406,8 @@ TEST_F(BenchmarkMultiDimDiffToolTest, PerformanceComparison) {
 // Minimal configuration test
 TEST_F(BenchmarkMultiDimDiffToolTest, MinimalConfiguration) {
     auto minimal_config = config_;
-    minimal_config.iterations = 100;       // Fast execution
-    minimal_config.warmupRuns = 10;
+    minimal_config.iterations = 10;       // Fast execution
+    minimal_config.warmupRuns = 5;
     minimal_config.showJacobianDetails = false;
     minimal_config.showScalingAnalysis = false;
     

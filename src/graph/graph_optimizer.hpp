@@ -59,8 +59,7 @@ public:
         bool enableInactiveFolding = true;       // Fold constant subgraphs (isActive=false nodes)
         bool enableCSE = true;                   // Common Subexpression Elimination
         bool enableAlgebraicSimplification = true; // Algebraic simplifications and strength reduction
-        bool enableStabilityCleaning = true;    // Fix numerical stability issues (1/exp(x) -> exp(-x)) - TEMPORARY: Disabled to isolate JIT input issue
-        bool enablePlaceholderOptimization = false;  // Reserved for future high-impact optimization
+        bool enableStabilityCleaning = true;    // Fix numerical stability issues (1/exp(x) -> exp(-x))
         bool enableConstantCleanup = true;      // Remove unused constants from const pool
         
         // Performance vs. compile time trade-offs

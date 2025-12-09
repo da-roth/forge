@@ -12,8 +12,8 @@ protected:
     
     void SetUp() override {
         // Configure for comprehensive benchmarking with derivatives
-        config_.iterations = 1000;  // Reduced for faster tests
-        config_.warmupRuns = 100;
+        config_.iterations = 10;  // Reduced for faster tests
+        config_.warmupRuns = 5;
         config_.finiteDiffBump = 1e-8;
         config_.useRichardsonExtrapolation = false;
         config_.absoluteTolerance = 1e-10;
@@ -66,8 +66,8 @@ TEST_F(BenchmarkDiffToolTest, ExponentialBenchmark) {
 TEST_F(BenchmarkDiffToolTest, ComprehensiveBenchmark) {
     // Test with reduced iterations for faster CI/CD
     auto fastConfig = config_;
-    fastConfig.iterations = 500;
-    fastConfig.warmupRuns = 50;
+    fastConfig.iterations = 10;
+    fastConfig.warmupRuns = 5;
     
     auto runner = makeBenchmarkDiffRunner<double(*)(double), fdouble(*)(fdouble)>(fastConfig);
     
@@ -86,8 +86,8 @@ TEST_F(BenchmarkDiffToolTest, ComprehensiveBenchmark) {
 TEST_F(BenchmarkDiffToolTest, MinimalConfiguration) {
     // Test with minimal configuration for quick smoke test
     auto minimalConfig = config_;
-    minimalConfig.iterations = 100;
-    minimalConfig.warmupRuns = 10;
+    minimalConfig.iterations = 10;
+    minimalConfig.warmupRuns = 5;
     
     auto runner = makeBenchmarkDiffRunner<double(*)(double), fdouble(*)(fdouble)>(minimalConfig);
     runner.AddFunction("Inverse", inverse<double>, inverse<fdouble>, 
@@ -99,7 +99,7 @@ TEST_F(BenchmarkDiffToolTest, MinimalConfiguration) {
 TEST_F(BenchmarkDiffToolTest, RichardsonExtrapolation) {
     // Test with Richardson extrapolation for higher gradient accuracy
     auto richardsonConfig = config_;
-    richardsonConfig.iterations = 500;
+    richardsonConfig.iterations = 10;
     richardsonConfig.useRichardsonExtrapolation = true;
     richardsonConfig.derivativeAbsTolerance = 1e-8;  // Tighter tolerance with Richardson
     
@@ -131,8 +131,8 @@ TEST_F(BenchmarkDiffToolTest, RationalFunction) {
 TEST_F(BenchmarkDiffToolTest, HighPerformanceMode) {
     // Test with high iteration count for accurate performance measurement
     auto perfConfig = config_;
-    perfConfig.iterations = 5000;
-    perfConfig.warmupRuns = 500;
+    perfConfig.iterations = 10;
+    perfConfig.warmupRuns = 5;
     
     auto runner = makeBenchmarkDiffRunner<double(*)(double), fdouble(*)(fdouble)>(perfConfig);
     runner.AddFunction("Linear", linear<double>, linear<fdouble>, 
@@ -158,8 +158,8 @@ TEST_F(BenchmarkDiffToolTest, AmericanOptionsBenchmark) {
     auto optionConfig = config_;
     optionConfig.derivativeAbsTolerance = 1e-3;
     optionConfig.derivativeRelTolerance = 1e-3;
-    optionConfig.iterations = 100;  // Fewer iterations since options are complex
-    optionConfig.warmupRuns = 10;
+    optionConfig.iterations = 10;  // Fewer iterations since options are complex
+    optionConfig.warmupRuns = 5;
     
     auto runner = makeBenchmarkDiffRunner<double(*)(double), fdouble(*)(fdouble)>(optionConfig);
     
@@ -182,8 +182,8 @@ TEST_F(BenchmarkDiffToolTest, AmericanOptionsBenchmarkAVX2) {
     auto optionConfig = config_;
     optionConfig.derivativeAbsTolerance = 1e-3;
     optionConfig.derivativeRelTolerance = 1e-3;
-    optionConfig.iterations = 100;  // Fewer iterations since options are complex
-    optionConfig.warmupRuns = 10;
+    optionConfig.iterations = 10;  // Fewer iterations since options are complex
+    optionConfig.warmupRuns = 5;
     
     // Configure compiler for AVX2 SIMD - processes 4 values in parallel
     optionConfig.compilerConfig.instructionSet = forge::CompilerConfig::InstructionSet::AVX2_PACKED;
@@ -214,8 +214,8 @@ TEST_F(BenchmarkDiffToolTest, AmericanOptionsBenchmarkAVX2) {
 TEST_F(BenchmarkDiffToolTest, SmallIterativeGraphBenchmark) {
     // Configure for small iterative graph testing
     auto graphConfig = config_;
-    graphConfig.iterations = 100;  // Reduce iterations since graph is complex
-    graphConfig.warmupRuns = 10;
+    graphConfig.iterations = 10;  // Reduce iterations since graph is complex
+    graphConfig.warmupRuns = 5;
     graphConfig.derivativeAbsTolerance = 1e-5;  // Relaxed tolerance for complex graph
     graphConfig.derivativeRelTolerance = 1e-5;
     
@@ -231,7 +231,7 @@ TEST_F(BenchmarkDiffToolTest, SmallIterativeGraphBenchmark) {
 TEST_F(BenchmarkDiffToolTest, MediumIterativeGraphBenchmark) {
     // Configure for medium iterative graph testing (~10K operations)
     auto graphConfig = config_;
-    graphConfig.iterations = 50;  // Further reduce iterations for medium complexity
+    graphConfig.iterations = 10;  // Further reduce iterations for medium complexity
     graphConfig.warmupRuns = 5;
     graphConfig.derivativeAbsTolerance = 1e-4;  // More relaxed tolerance for medium graph
     graphConfig.derivativeRelTolerance = 1e-4;

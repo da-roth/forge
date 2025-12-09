@@ -50,53 +50,6 @@ namespace forge {
  */
 class AVX2NodeValueBuffer : public INodeValueBuffer {
 public:
-    explicit AVX2NodeValueBuffer(const forge::Graph& tape)
-        : num_nodes_(tape.nodes.size()), vector_width_(4) {
-        diff_inputs_ = tape.diff_inputs;
-        // Build hash set for O(1) lookup in getGradient()
-        diff_inputs_set_.insert(diff_inputs_.begin(), diff_inputs_.end());
-        // Initialize identity mapping
-        originalToOptimizedMapping_.resize(tape.nodes.size());
-        for (size_t i = 0; i < tape.nodes.size(); ++i) {
-            originalToOptimizedMapping_[i] = i;
-        }
-
-        // Allocate values - 4 doubles per node for AVX2
-        size_t totalDoubles = num_nodes_ * vector_width_;
-
-        // Safety check: ensure we allocate at least some memory
-        if (totalDoubles == 0) {
-            totalDoubles = vector_width_;  // At least one YMM register worth
-        }
-
-        // Calculate allocation size - must be multiple of alignment for aligned_alloc on Linux
-        size_t allocSize = totalDoubles * sizeof(double);
-        size_t alignedAllocSize = (allocSize + 31) & ~size_t(31);  // Round up to multiple of 32
-
-        // Platform-specific aligned allocation
-#ifdef _WIN32
-        values_ = static_cast<double*>(_aligned_malloc(allocSize, 32));  // 32-byte alignment for AVX2
-#else
-        values_ = static_cast<double*>(aligned_alloc(32, alignedAllocSize));
-#endif
-        if (!values_) {
-            throw std::bad_alloc();
-        }
-        std::memset(values_, 0, allocSize);
-
-        // Allocate gradients if needed (also 4 doubles per node)
-        if (!diff_inputs_.empty()) {
-#ifdef _WIN32
-            gradients_ = static_cast<double*>(_aligned_malloc(allocSize, 32));
-#else
-            gradients_ = static_cast<double*>(aligned_alloc(32, alignedAllocSize));
-#endif
-            if (gradients_) {
-                std::memset(gradients_, 0, allocSize);
-            }
-        }
-    }
-
     // Constructor with node ID mapping and explicit buffer size
     AVX2NodeValueBuffer(const forge::Graph& tape,
                         const std::vector<forge::NodeId>& originalToOptimizedMapping,
@@ -148,82 +101,6 @@ public:
             std::memset(gradients_, 0, allocSize);
         } else {
             gradients_ = nullptr;
-        }
-    }
-
-    // Constructor with node ID mapping (old version - calculates size from mapping)
-    AVX2NodeValueBuffer(const forge::Graph& tape,
-                        const std::vector<forge::NodeId>& originalToOptimizedMapping)
-        : vector_width_(4), originalToOptimizedMapping_(originalToOptimizedMapping) {
-
-        // Check if this is an identity mapping (all values are -1 or sequential)
-        bool isIdentityMapping = true;
-        size_t maxOptimizedNodeId = 0;
-        bool hasValidMapping = false;
-
-        for (size_t i = 0; i < originalToOptimizedMapping.size(); ++i) {
-            forge::NodeId optimizedId = originalToOptimizedMapping[i];
-            if (optimizedId != static_cast<forge::NodeId>(-1)) {
-                hasValidMapping = true;
-                maxOptimizedNodeId = std::max(maxOptimizedNodeId, static_cast<size_t>(optimizedId));
-                if (optimizedId != static_cast<forge::NodeId>(i)) {
-                    isIdentityMapping = false;
-                }
-            }
-        }
-
-        // If no valid mappings found (all -1), use identity mapping
-        if (!hasValidMapping || isIdentityMapping) {
-            // Use the original tape size for identity mapping
-            num_nodes_ = originalToOptimizedMapping.size();
-            // Replace the mapping with identity
-            originalToOptimizedMapping_.clear();
-            originalToOptimizedMapping_.resize(num_nodes_);
-            for (size_t i = 0; i < num_nodes_; ++i) {
-                originalToOptimizedMapping_[i] = i;
-            }
-        } else {
-            // Buffer needs to accommodate all optimized node IDs (0 to maxOptimizedNodeId inclusive)
-            num_nodes_ = maxOptimizedNodeId + 1;
-        }
-
-        diff_inputs_ = tape.diff_inputs;
-        // Build hash set for O(1) lookup in getGradient()
-        diff_inputs_set_.insert(diff_inputs_.begin(), diff_inputs_.end());
-
-        // Allocate values - 4 doubles per node for AVX2
-        size_t totalDoubles = num_nodes_ * vector_width_;
-
-        // Safety check: ensure we allocate at least some memory
-        if (totalDoubles == 0) {
-            totalDoubles = vector_width_;  // At least one YMM register worth
-        }
-
-        // Calculate allocation size - must be multiple of alignment for aligned_alloc on Linux
-        size_t allocSize = totalDoubles * sizeof(double);
-        size_t alignedAllocSize = (allocSize + 31) & ~size_t(31);  // Round up to multiple of 32
-
-        // Platform-specific aligned allocation
-#ifdef _WIN32
-        values_ = static_cast<double*>(_aligned_malloc(allocSize, 32));  // 32-byte alignment for AVX2
-#else
-        values_ = static_cast<double*>(aligned_alloc(32, alignedAllocSize));
-#endif
-        if (!values_) {
-            throw std::bad_alloc();
-        }
-        std::memset(values_, 0, allocSize);
-
-        // Allocate gradients if needed (also 4 doubles per node)
-        if (!diff_inputs_.empty()) {
-#ifdef _WIN32
-            gradients_ = static_cast<double*>(_aligned_malloc(allocSize, 32));
-#else
-            gradients_ = static_cast<double*>(aligned_alloc(32, alignedAllocSize));
-#endif
-            if (gradients_) {
-                std::memset(gradients_, 0, allocSize);
-            }
         }
     }
 
@@ -284,23 +161,6 @@ public:
             // Load 4 contiguous doubles and store interleaved
             __m256d grads = _mm256_load_pd(&gradients_[baseIdx]);
             _mm256_storeu_pd(&output[i * vector_width_], grads);
-        }
-    }
-
-    void getGradientLanesSeparate(const std::vector<size_t>& bufferIndices, double* outputs[4]) const override {
-        if (!gradients_) return;
-
-        for (size_t i = 0; i < bufferIndices.size(); ++i) {
-            size_t baseIdx = bufferIndices[i];
-            // Load 4 contiguous doubles
-            __m256d grads = _mm256_load_pd(&gradients_[baseIdx]);
-            // Extract to 4 different output arrays (only write to non-null pointers)
-            __m128d lo = _mm256_castpd256_pd128(grads);      // lanes 0, 1
-            __m128d hi = _mm256_extractf128_pd(grads, 1);    // lanes 2, 3
-            if (outputs[0]) outputs[0][i] = _mm_cvtsd_f64(lo);               // lane 0
-            if (outputs[1]) outputs[1][i] = _mm_cvtsd_f64(_mm_unpackhi_pd(lo, lo));  // lane 1
-            if (outputs[2]) outputs[2][i] = _mm_cvtsd_f64(hi);               // lane 2
-            if (outputs[3]) outputs[3][i] = _mm_cvtsd_f64(_mm_unpackhi_pd(hi, hi));  // lane 3
         }
     }
 

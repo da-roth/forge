@@ -26,10 +26,7 @@ forge::Graph InactiveFolding::apply(const forge::Graph& graph,
         switch (node.op) {
             case forge::OpCode::Constant: {
                 size_t constIndex = static_cast<size_t>(node.imm);
-                if (constIndex < graph.constPool.size()) {
-                    return graph.constPool[constIndex];
-                }
-                return 0.0;
+                return graph.constPool[constIndex];
             }
             case forge::OpCode::Add: {
                 double a = evaluateConstantSubgraph(node.a);
@@ -172,7 +169,10 @@ forge::Graph InactiveFolding::apply(const forge::Graph& graph,
                 return ((a != 0.0) != (b != 0.0)) ? 1.0 : 0.0;
             }
             default:
-                return 0.0;  // Unknown operation, return 0
+                // All supported operations are handled above.
+                // Input nodes should never reach here (they are active).
+                // Any other OpCode in an inactive subgraph is unsupported.
+                return 0.0;
         }
     };
     
@@ -187,32 +187,28 @@ forge::Graph InactiveFolding::apply(const forge::Graph& graph,
         
         // Check if this node is part of a constant subgraph
         if (!node.isActive) {
-            // This is an inactive node, check if it can be folded
-            try {
-                double foldedValue = evaluateConstantSubgraph(oldId);
-                
-                // Add as a new constant node
-                forge::NodeId newConstId = result.addConstant(foldedValue);
-                oldToNew[oldId] = newConstId;
-                foldedCount++;
-                
-                // Mark all nodes in this constant subgraph as processed
-                std::function<void(forge::NodeId)> markProcessed = [&](forge::NodeId id) {
-                    if (id < graph.nodes.size() && oldToNew[id] == UINT32_MAX) {
-                        oldToNew[id] = newConstId;  // All point to the same constant
-                        const auto& subNode = graph.nodes[id];
-                        if (!subNode.isActive) {
-                            if (subNode.a != UINT32_MAX) markProcessed(subNode.a);
-                            if (subNode.b != UINT32_MAX) markProcessed(subNode.b);
-                            if (subNode.c != UINT32_MAX) markProcessed(subNode.c);
-                        }
+            // This is an inactive node - evaluate and fold it
+            double foldedValue = evaluateConstantSubgraph(oldId);
+
+            // Add as a new constant node
+            forge::NodeId newConstId = result.addConstant(foldedValue);
+            oldToNew[oldId] = newConstId;
+            foldedCount++;
+
+            // Mark all nodes in this constant subgraph as processed
+            std::function<void(forge::NodeId)> markProcessed = [&](forge::NodeId id) {
+                if (id < graph.nodes.size() && oldToNew[id] == UINT32_MAX) {
+                    oldToNew[id] = newConstId;  // All point to the same constant
+                    const auto& subNode = graph.nodes[id];
+                    if (!subNode.isActive) {
+                        if (subNode.a != UINT32_MAX) markProcessed(subNode.a);
+                        if (subNode.b != UINT32_MAX) markProcessed(subNode.b);
+                        if (subNode.c != UINT32_MAX) markProcessed(subNode.c);
                     }
-                };
-                markProcessed(oldId);
-                continue;
-            } catch (...) {
-                // If evaluation fails, treat as regular node
-            }
+                }
+            };
+            markProcessed(oldId);
+            continue;
         }
         
         // This is an active node, add it to the result

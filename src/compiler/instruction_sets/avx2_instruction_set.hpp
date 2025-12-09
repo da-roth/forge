@@ -111,63 +111,19 @@ public:
         tracer.emitTraceYMM(a, getYmmRegister(dstReg), OperationType::DIV, 4);
     }
     
-    // Three-operand arithmetic (AVX2 naturally supports 3-operand forms)
-    void emitAdd3(asmjit::x86::Assembler& a, int dstReg, int src1Reg, int src2Reg) override {
-        // Perform the operation
-        a.vaddpd(getYmmRegister(dstReg), getYmmRegister(src1Reg), getYmmRegister(src2Reg));
-        
-        // Trace output values after operation
-        tracer.emitTraceYMM(a, getYmmRegister(dstReg), OperationType::ADD, 4);
-    }
-    
-    void emitSub3(asmjit::x86::Assembler& a, int dstReg, int src1Reg, int src2Reg) override {
-        // Perform the operation
-        a.vsubpd(getYmmRegister(dstReg), getYmmRegister(src1Reg), getYmmRegister(src2Reg));
-        
-        // Trace output values after operation
-        tracer.emitTraceYMM(a, getYmmRegister(dstReg), OperationType::SUB, 4);
-    }
-    
-    void emitMul3(asmjit::x86::Assembler& a, int dstReg, int src1Reg, int src2Reg) override {
-        // Trace input values before operation
-        tracer.emitTraceYMM(a, getYmmRegister(src1Reg), OperationType::MUL, 4);
-        tracer.emitTraceYMM(a, getYmmRegister(src2Reg), OperationType::MUL, 4);
-        
-        // Perform the operation
-        a.vmulpd(getYmmRegister(dstReg), getYmmRegister(src1Reg), getYmmRegister(src2Reg));
-        
-        // Trace output values after operation
-        tracer.emitTraceYMM(a, getYmmRegister(dstReg), OperationType::MUL, 4);
-    }
-    
-    void emitDiv3(asmjit::x86::Assembler& a, int dstReg, int src1Reg, int src2Reg) override {
-        // Trace input values before operation
-        tracer.emitTraceYMM(a, getYmmRegister(src1Reg), OperationType::DIV, 4);
-        tracer.emitTraceYMM(a, getYmmRegister(src2Reg), OperationType::DIV, 4);
-        
-        // Perform the operation: dst = src1 / src2
-        a.vdivpd(getYmmRegister(dstReg), getYmmRegister(src1Reg), getYmmRegister(src2Reg));
-        
-        // Trace output values after operation
-        tracer.emitTraceYMM(a, getYmmRegister(dstReg), OperationType::DIV, 4);
-    }
-    
     // Unary operations
-    void emitNeg(asmjit::x86::Assembler& a, int dstReg) override;
-    void emitAbs(asmjit::x86::Assembler& a, int dstReg) override;
+    void emitNeg(asmjit::x86::Assembler& a, int dstReg, int tempReg) override;
+    void emitAbs(asmjit::x86::Assembler& a, int dstReg, int tempReg) override;
     void emitSqrt(asmjit::x86::Assembler& a, int dstReg) override {
-        // Runtime tracing configured in tracer
-        
         // Trace input values before operation
         tracer.emitTraceYMM(a, getYmmRegister(dstReg), OperationType::SQRT, 4);
-        
+
         // Perform the operation
         a.vsqrtpd(getYmmRegister(dstReg), getYmmRegister(dstReg));
-        
+
         // Trace output values after operation
         tracer.emitTraceYMM(a, getYmmRegister(dstReg), OperationType::SQRT, 4);
     }
-    void emitRecip(asmjit::x86::Assembler& a, int dstReg) override;
     
     // Memory operations
     void emitLoad(asmjit::x86::Assembler& a, int dstReg, forge::NodeId nodeId) override;
@@ -191,9 +147,6 @@ public:
     void emitCmpGE(asmjit::x86::Assembler& a, int dstReg, int lhsReg, int rhsReg, IRegisterAllocator& regState) override;
     void emitCmpEQ(asmjit::x86::Assembler& a, int dstReg, int lhsReg, int rhsReg, IRegisterAllocator& regState) override;
     void emitCmpNE(asmjit::x86::Assembler& a, int dstReg, int lhsReg, int rhsReg, IRegisterAllocator& regState) override;
-    
-    // Create mask from boolean
-    void emitCreateMaskFromBool(asmjit::x86::Assembler& a, int dstReg, int srcReg) override;
     
     // Min/Max operations
     void emitMin(asmjit::x86::Assembler& a, int dstReg, int srcReg) override {
@@ -672,17 +625,7 @@ private:
     
     // Integer conditional
     void emitIntIf(asmjit::x86::Assembler& a, int dstReg, int condReg, int trueReg, int falseReg, IRegisterAllocator& regState) override;
-    
-    // Blending
-    void emitBlend(asmjit::x86::Assembler& a, int dstReg, int srcReg, int maskReg) override {
-        // Flip selection to validate mask polarity: select from dst when mask=0, from src when mask=1
-        // If semantics were inverted, swapping operands will fix select results.
-        a.vblendvpd(getYmmRegister(dstReg), getYmmRegister(srcReg), getYmmRegister(dstReg), getYmmRegister(maskReg));
-        
-        // Trace operation with register info
-        tracer.emitTraceYMM(a, getYmmRegister(dstReg), OperationType::BLEND, 4, -1, srcReg, maskReg);
-    }
-    
+
     // Zero register
     void emitZero(asmjit::x86::Assembler& a, int dstReg) override {
         a.vxorpd(getYmmRegister(dstReg), getYmmRegister(dstReg), getYmmRegister(dstReg));

@@ -5,8 +5,7 @@
 #include "../src/graph/graph.hpp"
 #include "../src/compiler/forge_engine.hpp"
 #include "../src/compiler/compiler_config.hpp"
-#include "../src/compiler/node_value_buffers/scalar_node_value_buffer.hpp"
-#include "../src/compiler/node_value_buffers/avx2_node_value_buffer.hpp"
+#include "../src/compiler/node_value_buffers/node_value_buffer.hpp"
 #include "test_graphs.hpp"
 
 using namespace forge;
@@ -60,16 +59,16 @@ TEST(ForgeEngineTest, CompileAndExecuteSimpleGraph) {
                 continue;
             }
 
-            ScalarNodeValueBuffer buffer(tg.graph);
+            auto buffer = NodeValueBufferFactory::create(tg.graph, *kernel);
             bool graphPassed = true;
 
             for (const auto& tc : tg.testCases) {
                 // Set all input values
                 for (size_t i = 0; i < tg.inputIds.size(); ++i) {
-                    buffer.setValue(tg.inputIds[i], tc.inputs[i]);
+                    buffer->setValue(tg.inputIds[i], tc.inputs[i]);
                 }
-                kernel->execute(buffer);
-                double result = buffer.getValue(tg.outputId);
+                kernel->execute(*buffer);
+                double result = buffer->getValue(tg.outputId);
 
                 if (!approxEqual(result, tc.expectedOutput)) {
                     std::cout << "  [FAIL] " << tg.name << ": inputs=" << formatInputs(tc.inputs)
@@ -117,18 +116,18 @@ TEST(ForgeEngineTest, CompileAndExecuteWithGradient) {
                 continue;
             }
 
-            ScalarNodeValueBuffer buffer(tg.graph);
+            auto buffer = NodeValueBufferFactory::create(tg.graph, *kernel);
             bool graphPassed = true;
 
             for (const auto& tc : tg.testCases) {
                 // Set all input values
                 for (size_t i = 0; i < tg.inputIds.size(); ++i) {
-                    buffer.setValue(tg.inputIds[i], tc.inputs[i]);
+                    buffer->setValue(tg.inputIds[i], tc.inputs[i]);
                 }
-                buffer.clearGradients();
-                kernel->execute(buffer);
-                double result = buffer.getValue(tg.outputId);
-                double gradient = buffer.getGradient(tg.inputIds[0]); // Gradient w.r.t. first input (x)
+                buffer->clearGradients();
+                kernel->execute(*buffer);
+                double result = buffer->getValue(tg.outputId);
+                double gradient = buffer->getGradient(tg.inputIds[0]); // Gradient w.r.t. first input (x)
 
                 if (!approxEqual(result, tc.expectedOutput)) {
                     std::cout << "  [FAIL] " << tg.name << ": inputs=" << formatInputs(tc.inputs)
@@ -189,16 +188,16 @@ TEST(ForgeEngineTestAVX2, CompileAndExecuteSimpleGraph) {
                 continue;
             }
 
-            AVX2NodeValueBuffer buffer(tg.graph);
+            auto buffer = NodeValueBufferFactory::create(tg.graph, *kernel);
             bool graphPassed = true;
 
             for (const auto& tc : tg.testCases) {
                 // Set all input values
                 for (size_t i = 0; i < tg.inputIds.size(); ++i) {
-                    buffer.setValue(tg.inputIds[i], tc.inputs[i]);
+                    buffer->setValue(tg.inputIds[i], tc.inputs[i]);
                 }
-                kernel->execute(buffer);
-                double result = buffer.getValue(tg.outputId);
+                kernel->execute(*buffer);
+                double result = buffer->getValue(tg.outputId);
 
                 if (!approxEqual(result, tc.expectedOutput)) {
                     std::cout << "  [FAIL] [AVX2] " << tg.name << ": inputs=" << formatInputs(tc.inputs)
@@ -248,18 +247,18 @@ TEST(ForgeEngineTestAVX2, CompileAndExecuteWithGradient) {
                 continue;
             }
 
-            AVX2NodeValueBuffer buffer(tg.graph);
+            auto buffer = NodeValueBufferFactory::create(tg.graph, *kernel);
             bool graphPassed = true;
 
             for (const auto& tc : tg.testCases) {
                 // Set all input values
                 for (size_t i = 0; i < tg.inputIds.size(); ++i) {
-                    buffer.setValue(tg.inputIds[i], tc.inputs[i]);
+                    buffer->setValue(tg.inputIds[i], tc.inputs[i]);
                 }
-                buffer.clearGradients();
-                kernel->execute(buffer);
-                double result = buffer.getValue(tg.outputId);
-                double gradient = buffer.getGradient(tg.inputIds[0]); // Gradient w.r.t. first input (x)
+                buffer->clearGradients();
+                kernel->execute(*buffer);
+                double result = buffer->getValue(tg.outputId);
+                double gradient = buffer->getGradient(tg.inputIds[0]); // Gradient w.r.t. first input (x)
 
                 if (!approxEqual(result, tc.expectedOutput)) {
                     std::cout << "  [FAIL] [AVX2] " << tg.name << ": inputs=" << formatInputs(tc.inputs)
@@ -318,16 +317,16 @@ TEST(ForgeEngineTestOptimized, CompileAndExecuteSimpleGraph) {
                 continue;
             }
 
-            ScalarNodeValueBuffer buffer(tg.graph);
+            auto buffer = NodeValueBufferFactory::create(tg.graph, *kernel);
             bool graphPassed = true;
 
             for (const auto& tc : tg.testCases) {
                 // Set all input values
                 for (size_t i = 0; i < tg.inputIds.size(); ++i) {
-                    buffer.setValue(tg.inputIds[i], tc.inputs[i]);
+                    buffer->setValue(tg.inputIds[i], tc.inputs[i]);
                 }
-                kernel->execute(buffer);
-                double result = buffer.getValue(tg.outputId);
+                kernel->execute(*buffer);
+                double result = buffer->getValue(tg.outputId);
 
                 if (!approxEqual(result, tc.expectedOutput)) {
                     std::cout << "  [FAIL] [Opt] " << tg.name << ": inputs=" << formatInputs(tc.inputs)
@@ -375,18 +374,18 @@ TEST(ForgeEngineTestOptimized, CompileAndExecuteWithGradient) {
                 continue;
             }
 
-            ScalarNodeValueBuffer buffer(tg.graph);
+            auto buffer = NodeValueBufferFactory::create(tg.graph, *kernel);
             bool graphPassed = true;
 
             for (const auto& tc : tg.testCases) {
                 // Set all input values
                 for (size_t i = 0; i < tg.inputIds.size(); ++i) {
-                    buffer.setValue(tg.inputIds[i], tc.inputs[i]);
+                    buffer->setValue(tg.inputIds[i], tc.inputs[i]);
                 }
-                buffer.clearGradients();
-                kernel->execute(buffer);
-                double result = buffer.getValue(tg.outputId);
-                double gradient = buffer.getGradient(tg.inputIds[0]); // Gradient w.r.t. first input (x)
+                buffer->clearGradients();
+                kernel->execute(*buffer);
+                double result = buffer->getValue(tg.outputId);
+                double gradient = buffer->getGradient(tg.inputIds[0]); // Gradient w.r.t. first input (x)
 
                 if (!approxEqual(result, tc.expectedOutput)) {
                     std::cout << "  [FAIL] [Opt] " << tg.name << ": inputs=" << formatInputs(tc.inputs)
@@ -447,16 +446,16 @@ TEST(ForgeEngineTestAVX2Optimized, CompileAndExecuteSimpleGraph) {
                 continue;
             }
 
-            AVX2NodeValueBuffer buffer(tg.graph);
+            auto buffer = NodeValueBufferFactory::create(tg.graph, *kernel);
             bool graphPassed = true;
 
             for (const auto& tc : tg.testCases) {
                 // Set all input values
                 for (size_t i = 0; i < tg.inputIds.size(); ++i) {
-                    buffer.setValue(tg.inputIds[i], tc.inputs[i]);
+                    buffer->setValue(tg.inputIds[i], tc.inputs[i]);
                 }
-                kernel->execute(buffer);
-                double result = buffer.getValue(tg.outputId);
+                kernel->execute(*buffer);
+                double result = buffer->getValue(tg.outputId);
 
                 if (!approxEqual(result, tc.expectedOutput)) {
                     std::cout << "  [FAIL] [AVX2+Opt] " << tg.name << ": inputs=" << formatInputs(tc.inputs)
@@ -506,18 +505,18 @@ TEST(ForgeEngineTestAVX2Optimized, CompileAndExecuteWithGradient) {
                 continue;
             }
 
-            AVX2NodeValueBuffer buffer(tg.graph);
+            auto buffer = NodeValueBufferFactory::create(tg.graph, *kernel);
             bool graphPassed = true;
 
             for (const auto& tc : tg.testCases) {
                 // Set all input values
                 for (size_t i = 0; i < tg.inputIds.size(); ++i) {
-                    buffer.setValue(tg.inputIds[i], tc.inputs[i]);
+                    buffer->setValue(tg.inputIds[i], tc.inputs[i]);
                 }
-                buffer.clearGradients();
-                kernel->execute(buffer);
-                double result = buffer.getValue(tg.outputId);
-                double gradient = buffer.getGradient(tg.inputIds[0]); // Gradient w.r.t. first input (x)
+                buffer->clearGradients();
+                kernel->execute(*buffer);
+                double result = buffer->getValue(tg.outputId);
+                double gradient = buffer->getGradient(tg.inputIds[0]); // Gradient w.r.t. first input (x)
 
                 if (!approxEqual(result, tc.expectedOutput)) {
                     std::cout << "  [FAIL] [AVX2+Opt] " << tg.name << ": inputs=" << formatInputs(tc.inputs)
@@ -554,4 +553,154 @@ TEST(ForgeEngineTestAVX2Optimized, CompileAndExecuteWithGradient) {
 
     std::cout << "\n  Summary: " << passed << " passed, " << failed << " failed" << std::endl;
     EXPECT_EQ(failed, 0) << "Some graphs failed";
+}
+
+// ============================================================================
+// Register Allocator Unit Tests
+// ============================================================================
+
+#include "../src/compiler/xmm_register_allocator.hpp"
+#include "../src/compiler/ymm_register_allocator.hpp"
+
+// Test that exercises the LRU eviction path in allocateAvoiding()
+// This happens when all registers are occupied and we need to evict one
+TEST(RegisterAllocatorTest, LRUEvictionPath) {
+    forge::XmmRegisterAllocator alloc;
+
+    // Fill all 16 registers with nodes
+    for (int i = 0; i < 16; ++i) {
+        int reg = alloc.allocateAvoiding({});
+        ASSERT_GE(reg, 0) << "Failed to allocate register " << i;
+        alloc.setRegister(reg, static_cast<forge::NodeId>(i), false);
+    }
+
+    // Now all registers are occupied. The next allocation should trigger LRU eviction.
+    // Allocate avoiding registers 0-5 to force eviction from 6-15
+    int evictedReg = alloc.allocateAvoiding({0, 1, 2, 3, 4, 5});
+    ASSERT_GE(evictedReg, 6) << "Should have evicted a register >= 6";
+    ASSERT_LE(evictedReg, 15) << "Should have evicted a register <= 15";
+
+    // The evicted register should now be empty (contents cleared)
+    EXPECT_EQ(alloc.findNodeInRegister(static_cast<forge::NodeId>(evictedReg)), -1)
+        << "Evicted register should no longer contain the old node";
+}
+
+// Test YMM allocator with blacklisted registers
+TEST(RegisterAllocatorTest, YmmBlacklistAndLRU) {
+    forge::YmmRegisterAllocator alloc;
+
+    // YMM14 and YMM15 are blacklisted in constructor
+    // Fill registers 0-13 (14 registers, skipping blacklisted ones)
+    std::vector<int> allocatedRegs;
+    for (int i = 0; i < 14; ++i) {
+        int reg = alloc.allocateAvoiding({});
+        ASSERT_GE(reg, 0) << "Failed to allocate register " << i;
+        ASSERT_NE(reg, 14) << "Should not allocate blacklisted YMM14";
+        ASSERT_NE(reg, 15) << "Should not allocate blacklisted YMM15";
+        alloc.setRegister(reg, static_cast<forge::NodeId>(i), false);
+        allocatedRegs.push_back(reg);
+    }
+
+    // Now all non-blacklisted registers are full. Next allocation triggers LRU eviction.
+    int evictedReg = alloc.allocateAvoiding({0, 1, 2});
+    ASSERT_GE(evictedReg, 0);
+    ASSERT_NE(evictedReg, 14) << "Should not allocate blacklisted YMM14";
+    ASSERT_NE(evictedReg, 15) << "Should not allocate blacklisted YMM15";
+}
+
+// Test getNodeInRegister and findNodeInRegister
+TEST(RegisterAllocatorTest, NodeTracking) {
+    forge::XmmRegisterAllocator alloc;
+
+    int reg = alloc.allocateAvoiding({});
+    ASSERT_GE(reg, 0);
+
+    // Initially empty
+    EXPECT_EQ(alloc.getNodeInRegister(reg), -1);
+    EXPECT_EQ(alloc.findNodeInRegister(42), -1);
+
+    // Set a node
+    alloc.setRegister(reg, 42, false);
+    EXPECT_EQ(alloc.getNodeInRegister(reg), 42);
+    EXPECT_EQ(alloc.findNodeInRegister(42), reg);
+
+    // Out of bounds should return -1
+    EXPECT_EQ(alloc.getNodeInRegister(-1), -1);
+    EXPECT_EQ(alloc.getNodeInRegister(100), -1);
+}
+
+// Test dirty flag tracking
+TEST(RegisterAllocatorTest, DirtyTracking) {
+    forge::XmmRegisterAllocator alloc;
+
+    int reg = alloc.allocateAvoiding({});
+    ASSERT_GE(reg, 0);
+
+    // Initially not dirty
+    EXPECT_FALSE(alloc.isDirty(reg));
+
+    // Set with dirty flag
+    alloc.setRegister(reg, 1, true);
+    EXPECT_TRUE(alloc.isDirty(reg));
+
+    // Set without dirty flag
+    alloc.setRegister(reg, 2, false);
+    EXPECT_FALSE(alloc.isDirty(reg));
+
+    // Out of bounds should return false
+    EXPECT_FALSE(alloc.isDirty(-1));
+    EXPECT_FALSE(alloc.isDirty(100));
+}
+
+// Test volatile register invalidation
+TEST(RegisterAllocatorTest, VolatileInvalidation) {
+    forge::XmmRegisterAllocator alloc;
+
+    // Allocate and fill some registers
+    for (int i = 0; i < 10; ++i) {
+        int reg = alloc.allocateAvoiding({});
+        alloc.setRegister(reg, static_cast<forge::NodeId>(i), true);
+    }
+
+    // Invalidate volatile registers (0-5 on Windows)
+    alloc.invalidateVolatileRegisters();
+
+    // Volatile registers should be empty
+    for (int i = alloc.getFirstVolatileReg(); i <= alloc.getLastVolatileReg(); ++i) {
+        EXPECT_EQ(alloc.getNodeInRegister(i), -1)
+            << "Volatile register " << i << " should be empty after invalidation";
+        EXPECT_FALSE(alloc.isDirty(i))
+            << "Volatile register " << i << " should not be dirty after invalidation";
+    }
+}
+
+// Test markDirty and markClean
+TEST(RegisterAllocatorTest, MarkDirtyClean) {
+    forge::XmmRegisterAllocator alloc;
+
+    int reg = alloc.allocateAvoiding({});
+    alloc.setRegister(reg, 1, false);
+
+    EXPECT_FALSE(alloc.isDirty(reg));
+
+    alloc.markDirty(reg);
+    EXPECT_TRUE(alloc.isDirty(reg));
+
+    alloc.markClean(reg);
+    EXPECT_FALSE(alloc.isDirty(reg));
+
+    // Out of bounds should be safe (no crash)
+    alloc.markDirty(-1);
+    alloc.markDirty(100);
+    alloc.markClean(-1);
+    alloc.markClean(100);
+}
+
+// Test getNumRegisters
+TEST(RegisterAllocatorTest, NumRegisters) {
+    forge::XmmRegisterAllocator xmmAlloc;
+    forge::YmmRegisterAllocator ymmAlloc;
+
+    EXPECT_EQ(xmmAlloc.getNumRegisters(), 16);
+    EXPECT_EQ(ymmAlloc.getNumRegisters(), 16);
 }

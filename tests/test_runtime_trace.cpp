@@ -23,12 +23,9 @@ protected:
 
 TEST_F(RuntimeTraceTest, TestTraceBufferInitialization) {
     EXPECT_TRUE(isTracingEnabled());
-    
-    // Test tracing a simple operation
-    double testData[4] = {1.0, 2.0, 3.0, 4.0};
-    traceVectorData(testData, 1, static_cast<uint32_t>(OperationType::ADD), 4);
-    
-    // Print trace records to verify
+
+    // Verify buffer is initialized and ready
+    // Actual tracing happens via JIT-generated code writing directly to g_traceBuffer
     printTraceRecords();
 }
 

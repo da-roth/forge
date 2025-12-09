@@ -37,8 +37,7 @@
 #include "../src/compiler/forge_engine.hpp"
 #include "../src/compiler/compiler_config.hpp"
 #include "../src/compiler/runtime_trace.hpp"
-#include "../src/compiler/node_value_buffers/scalar_node_value_buffer.hpp"
-#include "../src/compiler/node_value_buffers/avx2_node_value_buffer.hpp"
+#include "../src/compiler/node_value_buffers/node_value_buffer.hpp"
 #include "test_graphs.hpp"
 
 using namespace forge;
@@ -56,7 +55,7 @@ using namespace forge_tests;
 //   Tracing: ForgeEngine engine(configWithTracing);  // printRuntimeTrace = true
 //
 
-TEST(RuntimeTracerTest, SSE2_BasicTracingExample) {
+TEST(DebugHelperTraceTest, SSE2_BasicTracingExample) {
     std::cout << "\n";
     std::cout << "============================================================\n";
     std::cout << "  EXAMPLE: Enabling Runtime Tracing (SSE2 Scalar Mode)\n";
@@ -74,7 +73,7 @@ TEST(RuntimeTracerTest, SSE2_BasicTracingExample) {
     //
     // You can either:
     //   a) Start with Default() and enable tracing manually
-    //   b) Use SmartDebugTracing() for intelligent corruption detection
+    //   b) Use DebugTracing() preset
     //
     std::cout << "STEP 1: Configure the compiler for tracing\n";
     std::cout << "-------\n";
@@ -82,8 +81,8 @@ TEST(RuntimeTracerTest, SSE2_BasicTracingExample) {
     std::cout << "  CompilerConfig config = CompilerConfig::Default();\n";
     std::cout << "  config.printRuntimeTrace = true;\n";
     std::cout << "\n";
-    std::cout << "  // Option B: Use the SmartDebugTracing preset\n";
-    std::cout << "  CompilerConfig config = CompilerConfig::SmartDebugTracing();\n";
+    std::cout << "  // Option B: Use the DebugTracing preset\n";
+    std::cout << "  CompilerConfig config = CompilerConfig::DebugTracing();\n";
     std::cout << "\n";
 
     CompilerConfig config = CompilerConfig::Default();
@@ -127,13 +126,13 @@ TEST(RuntimeTracerTest, SSE2_BasicTracingExample) {
     std::cout << "  Expected: (3 + 4) * 2 = 14\n";
     std::cout << "\n";
 
-    ScalarNodeValueBuffer buffer(graph);
-    buffer.setValue(x, 3.0);
-    buffer.setValue(y, 4.0);
+    auto buffer = NodeValueBufferFactory::create(graph, *kernel);
+    buffer->setValue(x, 3.0);
+    buffer->setValue(y, 4.0);
 
-    kernel->execute(buffer);
+    kernel->execute(*buffer);
 
-    double output = buffer.getValue(result);
+    double output = buffer->getValue(result);
     std::cout << "  Result: " << output << "\n";
     std::cout << "\n";
 
@@ -168,7 +167,7 @@ TEST(RuntimeTracerTest, SSE2_BasicTracingExample) {
 // simultaneously in YMM (256-bit) registers.
 //
 
-TEST(RuntimeTracerTest, AVX2_BasicTracingExample) {
+TEST(DebugHelperTraceTest, AVX2_BasicTracingExample) {
     std::cout << "\n";
     std::cout << "============================================================\n";
     std::cout << "  EXAMPLE: Enabling Runtime Tracing (AVX2 Packed Mode)\n";
@@ -216,20 +215,20 @@ TEST(RuntimeTracerTest, AVX2_BasicTracingExample) {
     std::cout << "  Lane 3: x=0.0, y=4.71 -> sin(4.71) ~ -1.0\n";
     std::cout << "\n";
 
-    AVX2NodeValueBuffer buffer(graph);
+    auto buffer = NodeValueBufferFactory::create(graph, *kernel);
 
     // Set input values for all 4 lanes using setLanes
     double xVals[4] = {0.0, 1.0, 3.14159265, 0.0};
     double yVals[4] = {0.0, 0.57079632, 0.0, 4.71238898};
 
-    buffer.setLanes(x, xVals);
-    buffer.setLanes(y, yVals);
+    buffer->setLanes(x, xVals);
+    buffer->setLanes(y, yVals);
 
-    kernel->execute(buffer);
+    kernel->execute(*buffer);
 
     // Get all 4 output lanes using getLanes
     double outputs[4];
-    buffer.getLanes(result, outputs);
+    buffer->getLanes(result, outputs);
 
     std::cout << "Results:\n";
     for (int i = 0; i < 4; ++i) {
@@ -258,102 +257,14 @@ TEST(RuntimeTracerTest, AVX2_BasicTracingExample) {
 }
 
 // ============================================================================
-// EXAMPLE 3: Smart Tracing with Corruption Detection
-// ============================================================================
-//
-// This example shows how to use smart filtering to only trace operations
-// where corruption is detected (NaN, Inf, suspicious patterns).
-//
-
-TEST(RuntimeTracerTest, SmartTracingWithCorruptionDetection) {
-    std::cout << "\n";
-    std::cout << "============================================================\n";
-    std::cout << "  EXAMPLE: Smart Tracing with Corruption Detection\n";
-    std::cout << "============================================================\n";
-    std::cout << "\n";
-    std::cout << "Smart tracing reduces noise by only capturing operations\n";
-    std::cout << "where potential corruption is detected:\n";
-    std::cout << "  - NaN values\n";
-    std::cout << "  - Infinite values\n";
-    std::cout << "  - Suspicious zero patterns in vector lanes\n";
-    std::cout << "  - Known corruption patterns\n";
-    std::cout << "\n";
-
-    // -------------------------------------------------------------------------
-    // Use the SmartDebugTracing preset
-    // -------------------------------------------------------------------------
-    std::cout << "Configuration using SmartDebugTracing preset:\n";
-    std::cout << "  CompilerConfig config = CompilerConfig::SmartDebugTracing();\n";
-    std::cout << "\n";
-    std::cout << "This enables:\n";
-    std::cout << "  - printRuntimeTrace = true\n";
-    std::cout << "  - enableSmartTraceFilter = true\n";
-    std::cout << "  - traceCorruptedOnly = true\n";
-    std::cout << "  - detectNaNCorruption = true\n";
-    std::cout << "  - detectInfCorruption = true\n";
-    std::cout << "  - detectZeroCorruption = true\n";
-    std::cout << "\n";
-
-    CompilerConfig config = CompilerConfig::SmartDebugTracing();
-    config.instructionSet = CompilerConfig::InstructionSet::SSE2_SCALAR;
-
-    // Build a graph that could produce NaN: sqrt(x - y) where x < y
-    // (In this test we use valid values, but the smart filter is active)
-    Graph graph;
-    NodeId x = graph.addInput();
-    NodeId y = graph.addInput();
-    NodeId diff = addBinaryOp(graph, OpCode::Sub, x, y);
-    NodeId result = addUnaryOp(graph, OpCode::Sqrt, diff);
-    graph.markOutput(result);
-
-    std::cout << "Graph: z = sqrt(x - y)\n";
-    std::cout << "  With x=5, y=1: sqrt(4) = 2 (valid)\n";
-    std::cout << "  With x=1, y=5: sqrt(-4) = NaN (would trigger corruption detection)\n";
-    std::cout << "\n";
-
-    ForgeEngine engine(config);
-    auto kernel = engine.compile(graph);
-    ASSERT_NE(kernel, nullptr);
-
-    std::cout << "\n";
-
-    // Test with valid values
-    ScalarNodeValueBuffer buffer(graph);
-    buffer.setValue(x, 5.0);
-    buffer.setValue(y, 1.0);
-
-    kernel->execute(buffer);
-
-    double output = buffer.getValue(result);
-    std::cout << "Result: sqrt(5 - 1) = sqrt(4) = " << output << "\n";
-    std::cout << "\n";
-
-    EXPECT_DOUBLE_EQ(output, 2.0);
-
-    std::cout << "With smart filtering, only corrupted operations would appear in trace.\n";
-    std::cout << "Since our computation is valid, minimal trace output is expected.\n";
-    std::cout << "\n";
-
-    printTraceRecords();
-
-    std::cout << "\n";
-    std::cout << "============================================================\n";
-    std::cout << "  END OF EXAMPLE\n";
-    std::cout << "============================================================\n";
-    std::cout << "\n";
-
-    cleanupTraceBuffer();
-}
-
-// ============================================================================
-// EXAMPLE 4: Comparison - With and Without Tracing
+// EXAMPLE 3: Comparison - With and Without Tracing
 // ============================================================================
 //
 // This test shows the difference in compilation output between normal
 // mode and tracing mode.
 //
 
-TEST(RuntimeTracerTest, ComparisonWithAndWithoutTracing) {
+TEST(DebugHelperTraceTest, ComparisonWithAndWithoutTracing) {
     std::cout << "\n";
     std::cout << "============================================================\n";
     std::cout << "  COMPARISON: Normal vs Tracing Mode\n";
@@ -380,11 +291,11 @@ TEST(RuntimeTracerTest, ComparisonWithAndWithoutTracing) {
         auto kernel = engine.compile(graph);
         ASSERT_NE(kernel, nullptr);
 
-        ScalarNodeValueBuffer buffer(graph);
-        buffer.setValue(x, 5.0);
-        kernel->execute(buffer);
+        auto buffer = NodeValueBufferFactory::create(graph, *kernel);
+        buffer->setValue(x, 5.0);
+        kernel->execute(*buffer);
 
-        std::cout << "  Result: 5^2 = " << buffer.getValue(result) << "\n";
+        std::cout << "  Result: 5^2 = " << buffer->getValue(result) << "\n";
     }
 
     std::cout << "\n";
@@ -407,11 +318,11 @@ TEST(RuntimeTracerTest, ComparisonWithAndWithoutTracing) {
 
         std::cout << "\n";
 
-        ScalarNodeValueBuffer buffer(graph);
-        buffer.setValue(x, 5.0);
-        kernel->execute(buffer);
+        auto buffer = NodeValueBufferFactory::create(graph, *kernel);
+        buffer->setValue(x, 5.0);
+        kernel->execute(*buffer);
 
-        std::cout << "  Result: 5^2 = " << buffer.getValue(result) << "\n";
+        std::cout << "  Result: 5^2 = " << buffer->getValue(result) << "\n";
         std::cout << "\n";
 
         printTraceRecords();

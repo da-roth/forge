@@ -78,24 +78,10 @@ TEST_F(CompilerConfigTest, ValidationConfiguration) {
     EXPECT_TRUE(config.printOptimizationStats);
 }
 
-TEST_F(CompilerConfigTest, SmartDebugTracingConfiguration) {
-    auto config = CompilerConfig::SmartDebugTracing();
-    
-    EXPECT_TRUE(config.printRuntimeTrace);
-    EXPECT_TRUE(config.enableSmartTraceFilter);
-    EXPECT_TRUE(config.traceCorruptedOnly);
-    EXPECT_TRUE(config.traceNearCorruption);
-    EXPECT_EQ(config.corruptionContextSize, 3);
-}
+TEST_F(CompilerConfigTest, DebugTracingConfiguration) {
+    auto config = CompilerConfig::DebugTracing();
 
-TEST_F(CompilerConfigTest, SmartDebugWithContextConfiguration) {
-    auto config = CompilerConfig::SmartDebugWithContext();
-    
     EXPECT_TRUE(config.printRuntimeTrace);
-    EXPECT_TRUE(config.enableSmartTraceFilter);
-    EXPECT_FALSE(config.traceCorruptedOnly);  // Show everything
-    EXPECT_TRUE(config.traceNearCorruption);
-    EXPECT_EQ(config.corruptionContextSize, 5);
 }
 
 TEST_F(CompilerConfigTest, LoadFromEnvironmentSSE2) {

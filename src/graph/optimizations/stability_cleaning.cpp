@@ -20,33 +20,7 @@ forge::Graph StabilityCleaning::apply(const forge::Graph& graph,
     // Process nodes in original order to maintain dependency order by construction
     for (forge::NodeId oldId = 0; oldId < graph.nodes.size(); ++oldId) {
         const auto& node = graph.nodes[oldId];
-        
-        // Skip if this node is already processed (dead)
-        if (oldToNew[oldId] != UINT32_MAX) {
-            continue;
-        }
-        
-        // Skip dead nodes
-        if (node.isDead) {
-            // For dead nodes, we still need to add them to maintain order
-            forge::Node newNode = node;
-            
-            // Remap references to new node IDs
-            if (node.a != UINT32_MAX && oldToNew[node.a] != UINT32_MAX) {
-                newNode.a = oldToNew[node.a];
-            }
-            if (node.b != UINT32_MAX && oldToNew[node.b] != UINT32_MAX) {
-                newNode.b = oldToNew[node.b];
-            }
-            if (node.c != UINT32_MAX && oldToNew[node.c] != UINT32_MAX) {
-                newNode.c = oldToNew[node.c];
-            }
-            
-            forge::NodeId newId = result.addNode(newNode);
-            oldToNew[oldId] = newId;
-            continue;
-        }
-        
+
         // Apply stability transformations
         forge::Node newNode = node;
         bool transformed = false;
@@ -67,9 +41,8 @@ forge::Graph StabilityCleaning::apply(const forge::Graph& graph,
             // Check if numerator is constant 1.0
             if (isConstantValue(node.a, 1.0, graph)) {
                 // Check if denominator is exp(something)
-                if (node.b < graph.nodes.size() && 
-                    graph.nodes[node.b].op == forge::OpCode::Exp &&
-                    !graph.nodes[node.b].isDead) {
+                if (node.b < graph.nodes.size() &&
+                    graph.nodes[node.b].op == forge::OpCode::Exp) {
                     
                     // Transform to exp(-x)
                     newNode.op = forge::OpCode::Exp;
@@ -95,8 +68,7 @@ forge::Graph StabilityCleaning::apply(const forge::Graph& graph,
             // Pattern: exp(x) / exp(y) -> exp(x - y)
             else if (node.a < graph.nodes.size() && node.b < graph.nodes.size() &&
                      graph.nodes[node.a].op == forge::OpCode::Exp &&
-                     graph.nodes[node.b].op == forge::OpCode::Exp &&
-                     !graph.nodes[node.a].isDead && !graph.nodes[node.b].isDead) {
+                     graph.nodes[node.b].op == forge::OpCode::Exp) {
                 
                 // Transform to exp(x - y)
                 newNode.op = forge::OpCode::Exp;
@@ -121,24 +93,20 @@ forge::Graph StabilityCleaning::apply(const forge::Graph& graph,
         }
         // Pattern: log(exp(x)) -> x (but be careful about domain)
         else if (node.op == forge::OpCode::Log) {
-            if (node.a < graph.nodes.size() && 
-                graph.nodes[node.a].op == forge::OpCode::Exp &&
-                !graph.nodes[node.a].isDead) {
-                
-                // Transform to just x
-                newNode = graph.nodes[graph.nodes[node.a].a];
-                newNode.dst = oldId;
-                newNode.needsGradient = node.needsGradient || newNode.needsGradient;
-                newNode.isActive = node.isActive || newNode.isActive;
-                
-                transformed = true;
+            if (node.a < graph.nodes.size() &&
+                graph.nodes[node.a].op == forge::OpCode::Exp) {
+
+                // Map this log node directly to the (already remapped) input of exp
+                forge::NodeId expInputId = graph.nodes[node.a].a;
+                oldToNew[oldId] = oldToNew[expInputId];
+                stabilityFixes++;
+                continue;  // Skip adding a new node
             }
         }
         // Pattern: sqrt(x * x) -> abs(x) (but be careful about domain)
         else if (node.op == forge::OpCode::Sqrt) {
-            if (node.a < graph.nodes.size() && 
-                graph.nodes[node.a].op == forge::OpCode::Mul &&
-                !graph.nodes[node.a].isDead) {
+            if (node.a < graph.nodes.size() &&
+                graph.nodes[node.a].op == forge::OpCode::Mul) {
                 
                 const auto& mulNode = graph.nodes[node.a];
                 if (mulNode.a == mulNode.b) {  // x * x

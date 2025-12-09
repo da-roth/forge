@@ -108,10 +108,6 @@ forge::Graph GraphOptimizer::optimize(const forge::Graph& input) {
             }
         }
         
-        if (config_.enablePlaceholderOptimization) {
-            current = optimizations::PlaceholderOptimization::apply(current, stats_);
-        }
-        
         stats_.passesPerformed = pass + 1;
         
         // Stop early if no changes were made in this pass
@@ -273,10 +269,6 @@ GraphOptimizer::OptimizationResult GraphOptimizer::optimizeWithMapping(const for
             if (config_.printStepByStepDebug) {
                 printGraphDebug(current, "After Stability Cleaning");
             }
-        }
-        
-        if (config_.enablePlaceholderOptimization) {
-            current = optimizations::PlaceholderOptimization::apply(current, stats_);
         }
         
         stats_.passesPerformed = pass + 1;

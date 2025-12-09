@@ -20,8 +20,6 @@
 #include <iomanip>
 #include <stdexcept>
 #include <algorithm>  // For std::swap
-#include <set>        // For std::set
-#include <unordered_set>  // For std::unordered_set
 #include <cmath>      // For std::exp, std::log
 #include <chrono>     // For timing
 #include <asmjit/core.h>
@@ -30,32 +28,6 @@ namespace forge {
 
 using namespace asmjit;
 using namespace forge;
-
-// ========================================================================
-// JIT Compilation Configuration Options
-// ========================================================================
-
-// Fusion Blocks: Groups operations into blocks for better register allocation
-// When enabled, the JIT compiler analyzes the computation graph to identify
-// blocks of operations that can be processed together with optimized register
-// usage. Within each block, intermediate results are kept in registers as
-// much as possible, only spilling to memory when necessary.
-//
-// Benefits:
-// - Reduces memory traffic by keeping intermediate values in registers
-// - Better instruction-level parallelism within blocks
-// - More efficient register allocation for complex expressions
-//
-// Drawbacks:
-// - O(n²) liveness analysis is prohibitively expensive for large graphs (>100K nodes)
-// - The analysis time can exceed the actual compilation time by 100x
-// - For our use case with 270K+ node graphs, this adds 20+ seconds of overhead
-//
-// Current Status: DISABLED due to performance issues with large graphs
-static constexpr bool ENABLE_FUSION_BLOCKS = false;
-
-// Maximum block size when fusion blocks are enabled
-static constexpr int FUSION_BLOCK_SIZE = 15;  // Operations per block
 
 // Define the static JitRuntime (shared across all compilers)
 asmjit::JitRuntime ForgeEngine::s_runtime;
@@ -313,7 +285,6 @@ std::unique_ptr<StitchedKernel> ForgeEngine::compile(const Graph& graph) {
     // Detailed timing for stitching phases
     double constantPoolTime = 0.0;
     double codeGenerationTime = 0.0;
-    double fusionBlockTime = 0.0;
     double assemblyFinalizationTime = 0.0;
     std::unordered_map<std::string, double> opTypeTime;
     std::unordered_map<std::string, int> opTypeCounts;
@@ -468,98 +439,28 @@ std::unique_ptr<StitchedKernel> ForgeEngine::compile(const Graph& graph) {
         }
     }
     
-    // Phase 2.4: Fusion block identification (optional)
-    auto fusionStart = Clock::now();
-    std::vector<FusionBlock> blocks;
-    
-    if (ENABLE_FUSION_BLOCKS) {
-        // Identify fusion blocks for optimized register allocation
-        blocks = identifyFusionBlocks(workingGraph);
-        std::cout << "  Fusion blocks identified: " << blocks.size() << std::endl;
-    } else {
-        // Skip fusion blocks for performance reasons with large graphs
-        // Empty blocks vector means direct node-by-node processing
-    }
-    fusionBlockTime = Duration(Clock::now() - fusionStart).count();
-    
-    // Main code generation phase
+    // Main code generation phase - process nodes sequentially
     auto codeGenStart = Clock::now();
     int nodesProcessed = 0;
-    
-    if (blocks.empty()) {  // Use direct node processing when fusion blocks disabled
-        // Fallback to node-by-node processing if no blocks identified
-        for (NodeId nodeId = 0; nodeId < workingGraph.nodes.size(); ++nodeId) {
-            const Node& node = workingGraph.nodes[nodeId];
-            if (node.isDead) continue;  // Skip dead nodes from optimization
-            
-            // Track operation type timing
-            auto opStart = Clock::now();
-            std::string opName = getOpName(node.op);
 
-            // Always store immediately for now - disable lazy stores until dependency tracking is correct
-            ForwardStitcher::generateForwardOperation(a, node, nodeId, workingGraph, constantMap, constPoolLabel, regState, instructionSet_.get(), false);
+    for (NodeId nodeId = 0; nodeId < workingGraph.nodes.size(); ++nodeId) {
+        const Node& node = workingGraph.nodes[nodeId];
+        if (node.isDead) continue;  // Skip dead nodes from optimization
 
-            // Track maximum node ID
-            maxNodeIdAccessed = std::max(maxNodeIdAccessed, nodeId);
-            
-            double opTime = Duration(Clock::now() - opStart).count();
-            opTypeTime[opName] += opTime;
-            opTypeCounts[opName]++;
-            nodesProcessed++;
-        }
-    } else {
-        // Process each fusion block with smart register carryover
-        for (size_t blockIdx = 0; blockIdx < blocks.size(); ++blockIdx) {
-            const auto& block = blocks[blockIdx];
-            
-            // Process nodes within the block - always store immediately for now
-            for (NodeId nodeId = block.startNode; nodeId < block.endNode; ++nodeId) {
-                const Node& node = workingGraph.nodes[nodeId];
-                if (node.isDead) continue;  // Skip dead nodes from optimization
-                
-                // Track operation type timing
-                auto opStart = Clock::now();
-                std::string opName = getOpName(node.op);
+        // Track operation type timing
+        auto opStart = Clock::now();
+        std::string opName = getOpName(node.op);
 
-                // Always store immediately for now - disable lazy stores until dependency tracking is correct
-                ForwardStitcher::generateForwardOperation(a, node, nodeId, workingGraph, constantMap,
-                                constPoolLabel, regState, instructionSet_.get(), false);
+        // Generate forward operation code
+        ForwardStitcher::generateForwardOperation(a, node, nodeId, workingGraph, constantMap, constPoolLabel, regState, instructionSet_.get(), false);
 
-                // Track maximum node ID
-                maxNodeIdAccessed = std::max(maxNodeIdAccessed, nodeId);
-                
-                double opTime = Duration(Clock::now() - opStart).count();
-                opTypeTime[opName] += opTime;
-                opTypeCounts[opName]++;
-                nodesProcessed++;
-            }
-            
-            // Phase C: Smart block boundaries - only evict registers not needed by next block
-            if (blockIdx + 1 < blocks.size()) {
-                const auto& nextBlock = blocks[blockIdx + 1];
-                
-                // Collect all node IDs that will be needed by the next block
-                std::set<NodeId> neededByNextBlock;
-                for (NodeId nodeId = nextBlock.startNode; nodeId < nextBlock.endNode; ++nodeId) {
-                    const Node& node = workingGraph.nodes[nodeId];
-                    // Add operands that might be in registers
-                    if (node.a != static_cast<NodeId>(-1)) neededByNextBlock.insert(node.a);
-                    if (node.b != static_cast<NodeId>(-1)) neededByNextBlock.insert(node.b);
-                }
-                
-                // Evict registers that don't contain needed values
-                for (int i = 0; i < regState.getNumRegisters(); ++i) {
-                    int nodeId = regState.getNodeInRegister(i);
-                    if (nodeId >= 0 && neededByNextBlock.find(static_cast<NodeId>(nodeId)) == neededByNextBlock.end()) {
-                        // This register contains a value not needed by next block, evict it
-                        regState.setRegister(i, -1, false);  // Clear the register
-                    }
-                }
-            } else {
-                // Last block, clear everything
-                regState.clear();
-            }
-        }
+        // Track maximum node ID
+        maxNodeIdAccessed = std::max(maxNodeIdAccessed, nodeId);
+
+        double opTime = Duration(Clock::now() - opStart).count();
+        opTypeTime[opName] += opTime;
+        opTypeCounts[opName]++;
+        nodesProcessed++;
     }
     
     // Generate function epilogue
@@ -636,8 +537,6 @@ std::unique_ptr<StitchedKernel> ForgeEngine::compile(const Graph& graph) {
               << constantPoolTime << " ms" << std::endl;
     std::cout << "    - Code generation: " << std::fixed << std::setprecision(2)
               << codeGenerationTime << " ms (" << nodesProcessed << " nodes)" << std::endl;
-    std::cout << "    - Fusion blocks: " << std::fixed << std::setprecision(2)
-              << fusionBlockTime << " ms" << std::endl;
     std::cout << "    - Assembly finalization: " << std::fixed << std::setprecision(2)
               << assemblyFinalizationTime << " ms" << std::endl;
     
@@ -667,69 +566,6 @@ std::unique_ptr<StitchedKernel> ForgeEngine::compile(const Graph& graph) {
     }
     
     return std::make_unique<StitchedKernel>(func, s_runtime, optimizedGraph.nodes.size(), instructionSet_.get(), config_, optResult.originalToOptimizedMapping, maxNodeIdAccessed, workingGraph.nodes.size(), workingGraph.outputs);
-}
-
-// Forward pass generation delegated to ForwardStitcher
-// See forward_stitcher.cpp for implementation
-
-// All forward pass generation methods have been migrated to forward_stitcher.cpp:
-// - generatePrologue()
-// - generateEpilogue()
-// - generateOperation()
-// - ensureInRegister()
-// - tryOptimizedLoad()
-// - tryOptimizedStore()
-// - flushDirtyRegisters()
-//
-// These methods are now called via ForwardStitcher::generateForwardOperation()
-
-// Phase 2.4: Identify fusion blocks for block-based compilation
-std::vector<ForgeEngine::FusionBlock> ForgeEngine::identifyFusionBlocks(const Graph& graph) {
-    std::vector<FusionBlock> blocks;
-
-    // Simple strategy: Create blocks of fixed size operations
-    // Later can be improved with more sophisticated analysis based on
-    // data dependencies and register pressure
-    const int BLOCK_SIZE = FUSION_BLOCK_SIZE;  // Use configured block size
-
-    NodeId currentStart = 0;
-    while (currentStart < graph.nodes.size()) {
-        FusionBlock block;
-        block.startNode = currentStart;
-        block.endNode = std::min(currentStart + BLOCK_SIZE, static_cast<NodeId>(graph.nodes.size()));
-
-        // Identify live-out nodes: nodes in this block that are used by later blocks
-        // or are the final output node
-        for (NodeId nodeId = block.startNode; nodeId < block.endNode; ++nodeId) {
-            // Check if this node is used by any node after the block
-            bool isLiveOut = false;
-
-            // The last node in the entire graph is always the output
-            if (nodeId == graph.nodes.size() - 1) {
-                isLiveOut = true;
-            }
-
-            // Check if used by nodes after this block
-            if (!isLiveOut) {
-                for (NodeId checkId = block.endNode; checkId < graph.nodes.size(); ++checkId) {
-                    const Node& checkNode = graph.nodes[checkId];
-                    if ((checkNode.a == nodeId) || (checkNode.b == nodeId)) {
-                        isLiveOut = true;
-                        break;
-                    }
-                }
-            }
-
-            if (isLiveOut) {
-                block.liveOut.push_back(nodeId);
-            }
-        }
-
-        blocks.push_back(block);
-        currentStart = block.endNode;
-    }
-
-    return blocks;
 }
 
 } // namespace forge

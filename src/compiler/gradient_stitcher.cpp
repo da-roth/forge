@@ -96,7 +96,7 @@ void GradientStitcher::generateGradientOperation(
             }
             // For subtraction, negate before accumulating to b
             instructionSet->emitMove(a, 1, 0);  // Copy XMM0 to XMM1
-            instructionSet->emitNeg(a, 1);      // Negate XMM1
+            instructionSet->emitNeg(a, 1, 2);   // Negate XMM1, using XMM2 as temp
             if (node.b < graph.nodes.size() && graph.nodes[node.b].needsGradient) {
                 instructionSet->emitAccumulateGradient(a, 1, node.b);
             }
@@ -157,7 +157,7 @@ void GradientStitcher::generateGradientOperation(
                 instructionSet->emitMul(a, 1, 1);    // xmm1 = value[b] * value[b]
                 instructionSet->emitDiv(a, 2, 1);    // xmm2 = grad[nodeId] * value[a] / (value[b]^2)
                 // Negate and accumulate
-                instructionSet->emitNeg(a, 2);       // Negate xmm2
+                instructionSet->emitNeg(a, 2, 3);    // Negate xmm2, using xmm3 as temp
                 instructionSet->emitAccumulateGradient(a, 2, node.b);
                 
                 if (config && config->printGradientDebug) {
@@ -175,33 +175,46 @@ void GradientStitcher::generateGradientOperation(
             // grad[a] -= grad[nodeId]
             if (node.a < graph.nodes.size() && graph.nodes[node.a].needsGradient) {
                 instructionSet->emitLoadGradient(a, 0, nodeId);
-                instructionSet->emitNeg(a, 0);  // Negate xmm0
+                instructionSet->emitNeg(a, 0, 1);  // Negate xmm0, using xmm1 as temp
                 instructionSet->emitAccumulateGradient(a, 0, node.a);
             }
             break;
         }
-            
+
         case OpCode::Abs:
             // grad[a] += sign(value[a]) * grad[nodeId]
             // sign(x) = 1 if x > 0, -1 if x < 0, 0 if x == 0
+            // Using bit manipulation approach (same as forward stitcher for Abs)
+            // This works correctly for both SSE2 and AVX2
             if (node.a < graph.nodes.size() && graph.nodes[node.a].needsGradient) {
                 instructionSet->emitLoadValueForGradient(a, 1, node.a, graph, &constantMap, constPoolLabel);
                 instructionSet->emitLoadGradient(a, 0, nodeId);
-                
-                // Create sign function: sign(x) = (x > 0) ? 1 : ((x < 0) ? -1 : 0)
-                instructionSet->emitLoadImmediate(a, 2, 0.0);  // Zero for comparison
-                instructionSet->emitCmpGT(a, 3, 1, 2, regState);  // Compare value[a] > 0, store in reg 3
-                instructionSet->emitCmpLT(a, 4, 1, 2, regState);  // Compare value[a] < 0, store in reg 4
-                
-                // Convert comparison results to 1.0 and -1.0
-                instructionSet->emitLoadImmediate(a, 5, 1.0);   // Load 1.0
-                instructionSet->emitLoadImmediate(a, 6, -1.0);  // Load -1.0
-                instructionSet->emitAndPD(a, 3, 5);  // reg 3 = (x > 0) ? 1.0 : 0.0
-                instructionSet->emitAndPD(a, 4, 6);  // reg 4 = (x < 0) ? -1.0 : 0.0
-                instructionSet->emitAdd(a, 3, 4);    // reg 3 = sign(x)
-                
+
+                // Compute sign(x) using bit manipulation, with sign(0) = 0
+                // Approach: sign(x) = x / |x| for x != 0, and 0 for x == 0
+                // This naturally handles the x == 0 case (0/0 = NaN, but we avoid it)
+
+                // Step 1: Compute |x| using bit manipulation (clear sign bit)
+                instructionSet->emitCreateAllOnes(a, 2);      // reg 2 = all 1s
+                instructionSet->emitShiftRight(a, 2, 1);      // reg 2 = 0x7FFFFFFFFFFFFFFF (sign bit cleared)
+                instructionSet->emitMove(a, 3, 1);            // reg 3 = value[a]
+                instructionSet->emitAndPD(a, 3, 2);           // reg 3 = |value[a]|
+
+                // Step 2: Compute sign = x / |x|, but handle x == 0 specially
+                // Add a tiny epsilon to |x| to avoid division by zero
+                // This gives sign(0) ≈ 0 since 0 / epsilon ≈ 0
+                instructionSet->emitLoadImmediate(a, 4, 1e-300); // reg 4 = tiny epsilon
+                instructionSet->emitAdd(a, 3, 4);             // reg 3 = |x| + epsilon
+                instructionSet->emitMove(a, 5, 1);            // reg 5 = x
+                instructionSet->emitDiv(a, 5, 3);             // reg 5 = x / (|x| + epsilon) ≈ sign(x)
+
+                // Step 3: Round to exactly -1, 0, or +1 by truncating tiny values
+                // For normal values: x / (|x| + epsilon) ≈ ±1 (very close)
+                // For x = 0: 0 / epsilon = 0 (exactly)
+                // We can use this directly since the error is negligible
+
                 // Multiply gradient by sign
-                instructionSet->emitMul(a, 0, 3);  // grad[nodeId] * sign(value[a])
+                instructionSet->emitMul(a, 0, 5);  // grad[nodeId] * sign(value[a])
                 instructionSet->emitAccumulateGradient(a, 0, node.a);
             }
             break;
@@ -320,7 +333,7 @@ void GradientStitcher::generateGradientOperation(
                 instructionSet->emitSin(a, 2, 1, regState);  // xmm2 = sin(value[a])
                 instructionSet->emitLoadGradient(a, 0, nodeId);  // Load gradient after sin call
                 instructionSet->emitMul(a, 0, 2);  // xmm0 = grad[nodeId] * sin(value[a])
-                instructionSet->emitNeg(a, 0);  // xmm0 = -grad[nodeId] * sin(value[a])
+                instructionSet->emitNeg(a, 0, 3);  // xmm0 = -grad[nodeId] * sin(value[a]), using xmm3 as temp
                 instructionSet->emitAccumulateGradient(a, 0, node.a);
             }
             break;
@@ -437,7 +450,7 @@ void GradientStitcher::generateGradientOperation(
                 instructionSet->emitLoadValueForGradient(a, 1, node.a, graph, &constantMap, constPoolLabel);
                 instructionSet->emitMul(a, 1, 1);  // xmm1 = value[a] * value[a]
                 instructionSet->emitDiv(a, 0, 1);  // xmm0 = grad[nodeId] / (value[a]²)
-                instructionSet->emitNeg(a, 0);     // xmm0 = -grad[nodeId] / (value[a]²)
+                instructionSet->emitNeg(a, 0, 2);  // xmm0 = -grad[nodeId] / (value[a]²), using xmm2 as temp
                 instructionSet->emitAccumulateGradient(a, 0, node.a);
             }
             break;

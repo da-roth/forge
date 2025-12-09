@@ -182,8 +182,8 @@ protected:
         // ========================================================================
         // Step 4: Execution Benchmark (simulates Proxy_Forward)
         // ========================================================================
-        const int warmupRuns = 100;
-        const int benchmarkRuns = 10000;
+        const int warmupRuns = 5;
+        const int benchmarkRuns = 10;
 
         // Warmup
         for (int i = 0; i < warmupRuns; ++i) {

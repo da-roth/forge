@@ -27,8 +27,8 @@ namespace tools {
 using namespace forge;
 
 struct BenchmarkMultiDimDiffConfig {
-    size_t iterations = 10000;
-    size_t warmupRuns = 100;
+    size_t iterations = 10;
+    size_t warmupRuns = 5;
     double finiteDiffBump = 1e-8;
     bool useRichardsonExtrapolation = false;
     double absoluteTolerance = 1e-10;

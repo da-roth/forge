@@ -53,20 +53,6 @@ struct CompilerConfig {
     bool printNodeFlags = false;            // Print needsGradient and isActive flags for each node
     bool printRuntimeTrace = false;           // Default off: tracing can perturb YMM registers
     
-    // Smart runtime trace filtering options  
-    bool enableSmartTraceFilter = false;      // Enable intelligent corruption detection filtering
-    bool traceCorruptedOnly = true;          // Only trace operations with detected corruption
-    bool traceNearCorruption = true;         // Trace operations immediately before/after corruption
-    int corruptionContextSize = 2;           // Number of operations to show before/after corruption
-    
-    // Corruption detection criteria
-    bool detectNaNCorruption = true;         // Detect NaN values in vector lanes
-    bool detectInfCorruption = true;         // Detect infinite values in vector lanes  
-    bool detectZeroCorruption = true;        // Detect suspicious zero values in lanes 2-3 (AVX2)
-    bool detectPatternCorruption = true;     // Detect suspicious patterns like 0.002, 0.003 etc.
-    bool detectPartialCorruption = true;     // Detect when only some lanes work correctly
-    double corruptionThreshold = 1e-10;     // Threshold for detecting suspicious small values
-    
     // Performance tuning
     size_t maxRegisterCount = 16;           // Use XMM0-XMM15 (full set for maximum performance)
     
@@ -173,25 +159,10 @@ struct CompilerConfig {
         return config;
     }
 
-    /** @brief Create configuration with intelligent runtime tracing (corruption detection) */
-    static CompilerConfig SmartDebugTracing() {
+    /** @brief Create configuration with runtime tracing enabled */
+    static CompilerConfig DebugTracing() {
         CompilerConfig config;
         config.printRuntimeTrace = true;
-        config.enableSmartTraceFilter = true;
-        config.traceCorruptedOnly = true;
-        config.traceNearCorruption = true;
-        config.corruptionContextSize = 3;  // Show 3 operations before/after corruption
-        return config;
-    }
-
-    /** @brief Create configuration with comprehensive runtime tracing (full context) */
-    static CompilerConfig SmartDebugWithContext() {
-        CompilerConfig config;
-        config.printRuntimeTrace = true;
-        config.enableSmartTraceFilter = true;
-        config.traceCorruptedOnly = false;  // Show everything
-        config.traceNearCorruption = true;
-        config.corruptionContextSize = 5;   // Larger context window
         return config;
     }
 };

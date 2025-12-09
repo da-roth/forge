@@ -91,14 +91,14 @@ Write-Host "Found OpenCppCoverage: $openCppCoveragePath" -ForegroundColor Green
 
 # Determine build directory
 if ($BuildDir -eq "") {
-    # Try cmake-build-debug first (CLion), then build (VS/CMake)
-    $cmakeBuildDebug = Join-Path $ProjectRoot "cmake-build-debug"
+    # Try build first (VS/CMake), then cmake-build-debug (CLion)
     $buildFolder = Join-Path $ProjectRoot "build"
+    $cmakeBuildDebug = Join-Path $ProjectRoot "cmake-build-debug"
 
-    if (Test-Path $cmakeBuildDebug) {
-        $BuildDir = $cmakeBuildDebug
-    } elseif (Test-Path $buildFolder) {
+    if (Test-Path $buildFolder) {
         $BuildDir = $buildFolder
+    } elseif (Test-Path $cmakeBuildDebug) {
+        $BuildDir = $cmakeBuildDebug
     } else {
         Write-Host "ERROR: No build directory found!" -ForegroundColor Red
         Write-Host "Please build the project first or specify -BuildDir" -ForegroundColor Yellow

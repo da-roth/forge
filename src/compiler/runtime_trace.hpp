@@ -27,26 +27,11 @@ struct TraceBuffer {
     bool enabled;
 };
 
-// Smart filtering configuration for runtime
-struct RuntimeFilterConfig {
-    bool enableSmartFilter = false;
-    bool traceCorruptedOnly = false;
-    bool detectNaN = true;
-    bool detectInf = true;
-    bool detectZeroCorruption = true;
-    bool detectKnownPatterns = true;
-    bool detectPartialCorruption = true;
-};
-
 // Global trace buffer instance
 extern TraceBuffer g_traceBuffer;
-extern RuntimeFilterConfig g_filterConfig;
 
 // Initialize the trace buffer
 void initializeTraceBuffer(size_t bufferSize = 1024);
-
-// Configure smart filtering
-void configureSmartFiltering(const RuntimeFilterConfig& config);
 
 // Cleanup the trace buffer
 void cleanupTraceBuffer();
@@ -56,10 +41,6 @@ void setTracingEnabled(bool enabled);
 
 // Check if tracing is enabled
 bool isTracingEnabled();
-
-// Tracer function to be called from JIT code
-// This function is called with a pointer to stored vector data
-extern "C" void traceVectorData(const void* data, uint32_t instructionId, uint32_t operationType, uint32_t vectorWidth);
 
 // Helper function to get operation name from type
 const char* getOperationName(uint32_t operationType);

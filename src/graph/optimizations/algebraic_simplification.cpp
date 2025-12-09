@@ -21,32 +21,6 @@ forge::Graph AlgebraicSimplification::apply(const forge::Graph& graph,
     for (forge::NodeId oldId = 0; oldId < graph.nodes.size(); ++oldId) {
         const auto& node = graph.nodes[oldId];
 
-        // Skip if this node is already processed (dead)
-        if (oldToNew[oldId] != UINT32_MAX) {
-            continue;
-        }
-
-        // Skip dead nodes
-        if (node.isDead) {
-            // For dead nodes, we still need to add them to maintain order
-            forge::Node newNode = node;
-
-            // Remap references to new node IDs
-            if (node.a != UINT32_MAX && oldToNew[node.a] != UINT32_MAX) {
-                newNode.a = oldToNew[node.a];
-            }
-            if (node.b != UINT32_MAX && oldToNew[node.b] != UINT32_MAX) {
-                newNode.b = oldToNew[node.b];
-            }
-            if (node.c != UINT32_MAX && oldToNew[node.c] != UINT32_MAX) {
-                newNode.c = oldToNew[node.c];
-            }
-
-            forge::NodeId newId = result.addNode(newNode);
-            oldToNew[oldId] = newId;
-            continue;
-        }
-
         // Apply algebraic simplifications
         forge::Node newNode = node;
         bool simplified = false;

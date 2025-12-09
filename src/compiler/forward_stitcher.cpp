@@ -267,7 +267,7 @@ void ForwardStitcher::generateForwardOperation(
         }
 
         case OpCode::Neg: {
-            // Simplified negation: multiply by -1
+            // Optimized negation using XOR with sign bit
             int aRegIdx = regState.findNodeInRegister(node.a);
             if (aRegIdx < 0) {
                 aRegIdx = ensureInReg(node.a, {});
@@ -275,14 +275,11 @@ void ForwardStitcher::generateForwardOperation(
 
             regState.lock(aRegIdx);
 
-            // Allocate register for -1.0 constant
-            int negOneRegIdx = regState.allocateAvoiding({aRegIdx});
+            // Allocate temp register for sign mask
+            int tempRegIdx = regState.allocateAvoiding({aRegIdx});
 
-            // Load -1.0 into the register
-            instructionSet->emitLoadImmediate(a, negOneRegIdx, -1.0);
-
-            // Multiply: aRegIdx = aRegIdx * (-1.0)
-            instructionSet->emitMul(a, aRegIdx, negOneRegIdx);
+            // Use emitNeg with allocated temp register
+            instructionSet->emitNeg(a, aRegIdx, tempRegIdx);
 
             // Update register state and store
             regState.setRegister(aRegIdx, nodeId, deferStore);

@@ -84,73 +84,46 @@ extern "C" void call_vpow4d(const double* base, const double* exp, double* out) 
 namespace forge {
 
 // Emit negation: dst = -dst
-void AVX2InstructionSet::emitNeg(asmjit::x86::Assembler& a, int dstReg) {
+void AVX2InstructionSet::emitNeg(asmjit::x86::Assembler& a, int dstReg, int tempReg) {
     // Trace input values before operation
     tracer.emitTraceYMM(a, getYmmRegister(dstReg), OperationType::NEG, 4);
-    
+
     // XOR with sign bit to negate
-    auto signMask = asmjit::x86::ymm15;
-    
+    auto signMask = getYmmRegister(tempReg);
+
     // Load sign bit mask (0x8000000000000000 for all 4 lanes)
-    // CRITICAL: Don't use XMM15 as it corrupts YMM15 upper lanes!
-    // Instead, broadcast directly from memory
     a.mov(asmjit::x86::rax, 0x8000000000000000ULL);
     a.push(asmjit::x86::rax);  // Push value to stack
     a.vbroadcastsd(signMask, asmjit::x86::qword_ptr(asmjit::x86::rsp));
     a.add(asmjit::x86::rsp, 8);  // Clean up stack
-    
+
     // XOR to flip sign bit
     a.vxorpd(getYmmRegister(dstReg), getYmmRegister(dstReg), signMask);
-    
+
     // Trace output values after operation
     tracer.emitTraceYMM(a, getYmmRegister(dstReg), OperationType::NEG, 4);
 }
 
 // Emit absolute value: dst = |dst|
-void AVX2InstructionSet::emitAbs(asmjit::x86::Assembler& a, int dstReg) {
-    // Runtime tracing configured in tracer
-    
+void AVX2InstructionSet::emitAbs(asmjit::x86::Assembler& a, int dstReg, int tempReg) {
     // Trace input values before operation
     tracer.emitTraceYMM(a, getYmmRegister(dstReg), OperationType::ABS, 4);
-    
+
     // AND with mask to clear sign bit
-    auto absMask = asmjit::x86::ymm15;
-    
+    auto absMask = getYmmRegister(tempReg);
+
     // Create mask to clear sign bit (0x7FFFFFFFFFFFFFFF for all 4 lanes)
-    // CRITICAL: Don't use XMM15 as it corrupts YMM15 upper lanes!
-    // Instead, broadcast directly from memory
     a.mov(asmjit::x86::rax, 0x7FFFFFFFFFFFFFFFULL);
     a.push(asmjit::x86::rax);  // Push value to stack
     a.vbroadcastsd(absMask, asmjit::x86::qword_ptr(asmjit::x86::rsp));
     a.add(asmjit::x86::rsp, 8);  // Clean up stack
-    
+
     // AND to clear sign bit
     a.vandpd(getYmmRegister(dstReg), getYmmRegister(dstReg), absMask);
-    
+
     // Trace output values after operation
     tracer.emitTraceYMM(a, getYmmRegister(dstReg), OperationType::ABS, 4);
 }
-
-// Emit reciprocal: dst = 1.0 / dst
-void AVX2InstructionSet::emitRecip(asmjit::x86::Assembler& a, int dstReg) {
-    // Load 1.0 and divide
-    auto oneReg = asmjit::x86::ymm15;
-    
-    // Load 1.0 into all 4 lanes
-    // CRITICAL: Don't use XMM15 as it corrupts YMM15 upper lanes!
-    // Instead, broadcast directly from memory
-    a.mov(asmjit::x86::rax, 0x3FF0000000000000ULL);  // IEEE 754 double 1.0
-    a.push(asmjit::x86::rax);  // Push value to stack
-    a.vbroadcastsd(oneReg, asmjit::x86::qword_ptr(asmjit::x86::rsp));
-    a.add(asmjit::x86::rsp, 8);  // Clean up stack
-    
-    // Divide: 1.0 / dst
-    a.vdivpd(getYmmRegister(dstReg), oneReg, getYmmRegister(dstReg));
-    
-    // Trace operation result
-    tracer.emitTraceYMM(a, getYmmRegister(dstReg), OperationType::RECIP, 4, -1, dstReg, dstReg);
-}
-
 
 // Memory operations
 void AVX2InstructionSet::emitLoad(asmjit::x86::Assembler& a, int dstReg, forge::NodeId nodeId) {
@@ -348,17 +321,6 @@ void AVX2InstructionSet::emitCmpNE(asmjit::x86::Assembler& a, int dstReg, int lh
     tracer.emitTraceYMM(a, getYmmRegister(dstReg), OperationType::CMP_NE, 4, -1, lhsReg, rhsReg);
 }
 
-// Create mask from boolean
-void AVX2InstructionSet::emitCreateMaskFromBool(asmjit::x86::Assembler& a, int dstReg, int srcReg) {
-    // Compare with zero to create mask
-    auto ymm15 = asmjit::x86::ymm15;
-    a.vxorpd(ymm15, ymm15, ymm15);  // Zero
-    a.vcmppd(getYmmRegister(dstReg), getYmmRegister(srcReg), ymm15, 4);  // NEQ_OQ
-    
-    // Trace the mask creation
-    tracer.emitTraceYMM(a, getYmmRegister(dstReg), OperationType::CREATE_MASK, 4, -1, srcReg, dstReg);
-}
-
 // Bit manipulation
 void AVX2InstructionSet::emitCreateAllOnes(asmjit::x86::Assembler& a, int dstReg) {
     a.vpcmpeqq(getYmmRegister(dstReg), getYmmRegister(dstReg), getYmmRegister(dstReg));
@@ -504,35 +466,96 @@ void AVX2InstructionSet::emitIf(asmjit::x86::Assembler& a, int dstReg, int condR
     tracer.emitTraceYMM(a, getYmmRegister(dstReg), OperationType::IF, 4, -1, trueReg, falseReg);
 }
 
-// Integer comparison operations
+// Integer comparison operations - truncate to integers before comparing
 void AVX2InstructionSet::emitIntCmpLT(asmjit::x86::Assembler& a, int dstReg, int lhsReg, int rhsReg, IRegisterAllocator& regState) {
-    // TODO: Implement integer comparison with truncation
-    emitCmpLT(a, dstReg, lhsReg, rhsReg, regState);
+    // Truncate operands to integers first
+    int tempLhsIdx = regState.allocateAvoiding({lhsReg, rhsReg, dstReg});
+    int tempRhsIdx = regState.allocateAvoiding({lhsReg, rhsReg, dstReg, tempLhsIdx});
+
+    emitRound(a, tempLhsIdx, lhsReg, 3);  // Truncate lhs
+    emitRound(a, tempRhsIdx, rhsReg, 3);  // Truncate rhs
+
+    // Compare truncated values
+    emitCmpLT(a, dstReg, tempLhsIdx, tempRhsIdx, regState);
+
+    regState.unlock(tempLhsIdx);
+    regState.unlock(tempRhsIdx);
 }
 
 void AVX2InstructionSet::emitIntCmpLE(asmjit::x86::Assembler& a, int dstReg, int lhsReg, int rhsReg, IRegisterAllocator& regState) {
-    emitCmpLE(a, dstReg, lhsReg, rhsReg, regState);
+    int tempLhsIdx = regState.allocateAvoiding({lhsReg, rhsReg, dstReg});
+    int tempRhsIdx = regState.allocateAvoiding({lhsReg, rhsReg, dstReg, tempLhsIdx});
+
+    emitRound(a, tempLhsIdx, lhsReg, 3);
+    emitRound(a, tempRhsIdx, rhsReg, 3);
+    emitCmpLE(a, dstReg, tempLhsIdx, tempRhsIdx, regState);
+
+    regState.unlock(tempLhsIdx);
+    regState.unlock(tempRhsIdx);
 }
 
 void AVX2InstructionSet::emitIntCmpGT(asmjit::x86::Assembler& a, int dstReg, int lhsReg, int rhsReg, IRegisterAllocator& regState) {
-    emitCmpGT(a, dstReg, lhsReg, rhsReg, regState);
+    int tempLhsIdx = regState.allocateAvoiding({lhsReg, rhsReg, dstReg});
+    int tempRhsIdx = regState.allocateAvoiding({lhsReg, rhsReg, dstReg, tempLhsIdx});
+
+    emitRound(a, tempLhsIdx, lhsReg, 3);
+    emitRound(a, tempRhsIdx, rhsReg, 3);
+    emitCmpGT(a, dstReg, tempLhsIdx, tempRhsIdx, regState);
+
+    regState.unlock(tempLhsIdx);
+    regState.unlock(tempRhsIdx);
 }
 
 void AVX2InstructionSet::emitIntCmpGE(asmjit::x86::Assembler& a, int dstReg, int lhsReg, int rhsReg, IRegisterAllocator& regState) {
-    emitCmpGE(a, dstReg, lhsReg, rhsReg, regState);
+    int tempLhsIdx = regState.allocateAvoiding({lhsReg, rhsReg, dstReg});
+    int tempRhsIdx = regState.allocateAvoiding({lhsReg, rhsReg, dstReg, tempLhsIdx});
+
+    emitRound(a, tempLhsIdx, lhsReg, 3);
+    emitRound(a, tempRhsIdx, rhsReg, 3);
+    emitCmpGE(a, dstReg, tempLhsIdx, tempRhsIdx, regState);
+
+    regState.unlock(tempLhsIdx);
+    regState.unlock(tempRhsIdx);
 }
 
 void AVX2InstructionSet::emitIntCmpEQ(asmjit::x86::Assembler& a, int dstReg, int lhsReg, int rhsReg, IRegisterAllocator& regState) {
-    emitCmpEQ(a, dstReg, lhsReg, rhsReg, regState);
+    int tempLhsIdx = regState.allocateAvoiding({lhsReg, rhsReg, dstReg});
+    int tempRhsIdx = regState.allocateAvoiding({lhsReg, rhsReg, dstReg, tempLhsIdx});
+
+    emitRound(a, tempLhsIdx, lhsReg, 3);
+    emitRound(a, tempRhsIdx, rhsReg, 3);
+    emitCmpEQ(a, dstReg, tempLhsIdx, tempRhsIdx, regState);
+
+    regState.unlock(tempLhsIdx);
+    regState.unlock(tempRhsIdx);
 }
 
 void AVX2InstructionSet::emitIntCmpNE(asmjit::x86::Assembler& a, int dstReg, int lhsReg, int rhsReg, IRegisterAllocator& regState) {
-    emitCmpNE(a, dstReg, lhsReg, rhsReg, regState);
+    int tempLhsIdx = regState.allocateAvoiding({lhsReg, rhsReg, dstReg});
+    int tempRhsIdx = regState.allocateAvoiding({lhsReg, rhsReg, dstReg, tempLhsIdx});
+
+    emitRound(a, tempLhsIdx, lhsReg, 3);
+    emitRound(a, tempRhsIdx, rhsReg, 3);
+    emitCmpNE(a, dstReg, tempLhsIdx, tempRhsIdx, regState);
+
+    regState.unlock(tempLhsIdx);
+    regState.unlock(tempRhsIdx);
 }
 
-// Integer conditional
+// Integer conditional - truncate true/false values to integers
 void AVX2InstructionSet::emitIntIf(asmjit::x86::Assembler& a, int dstReg, int condReg, int trueReg, int falseReg, IRegisterAllocator& regState) {
-    emitIf(a, dstReg, condReg, trueReg, falseReg, regState);
+    // Truncate true and false values to integers first
+    int tempTrueIdx = regState.allocateAvoiding({condReg, trueReg, falseReg, dstReg});
+    int tempFalseIdx = regState.allocateAvoiding({condReg, trueReg, falseReg, dstReg, tempTrueIdx});
+
+    emitRound(a, tempTrueIdx, trueReg, 3);   // Truncate true value
+    emitRound(a, tempFalseIdx, falseReg, 3); // Truncate false value
+
+    // Use regular If with truncated values
+    emitIf(a, dstReg, condReg, tempTrueIdx, tempFalseIdx, regState);
+
+    regState.unlock(tempTrueIdx);
+    regState.unlock(tempFalseIdx);
 }
 
 // Function prologue/epilogue

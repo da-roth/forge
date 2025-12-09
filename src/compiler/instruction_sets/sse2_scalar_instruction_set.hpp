@@ -83,87 +83,28 @@ public:
         tracer.emitTraceXMM(a, getRegister(dstReg), OperationType::DIV, 1, -1, srcReg, dstReg);
     }
     
-    // Three-operand arithmetic (dst = src1 op src2)
-    void emitAdd3(asmjit::x86::Assembler& a, int dstReg, int src1Reg, int src2Reg) override {
-        // Trace input values before operation
-        tracer.emitTraceXMM(a, getRegister(src1Reg), OperationType::ADD, 1);
-        tracer.emitTraceXMM(a, getRegister(src2Reg), OperationType::ADD, 1);
-        
-        if (dstReg != src1Reg) {
-            a.movsd(getRegister(dstReg), getRegister(src1Reg));
-        }
-        a.addsd(getRegister(dstReg), getRegister(src2Reg));
-        
-        // Trace output values after operation
-        tracer.emitTraceXMM(a, getRegister(dstReg), OperationType::ADD, 1);
-    }
-    
-    void emitSub3(asmjit::x86::Assembler& a, int dstReg, int src1Reg, int src2Reg) override {
-        // Trace input values before operation
-        tracer.emitTraceXMM(a, getRegister(src1Reg), OperationType::SUB, 1);
-        tracer.emitTraceXMM(a, getRegister(src2Reg), OperationType::SUB, 1);
-        
-        if (dstReg != src1Reg) {
-            a.movsd(getRegister(dstReg), getRegister(src1Reg));
-        }
-        a.subsd(getRegister(dstReg), getRegister(src2Reg));
-        
-        // Trace output values after operation
-        tracer.emitTraceXMM(a, getRegister(dstReg), OperationType::SUB, 1);
-    }
-    
-    void emitMul3(asmjit::x86::Assembler& a, int dstReg, int src1Reg, int src2Reg) override {
-        // Trace input values before operation
-        tracer.emitTraceXMM(a, getRegister(src1Reg), OperationType::MUL, 1);
-        tracer.emitTraceXMM(a, getRegister(src2Reg), OperationType::MUL, 1);
-        
-        if (dstReg != src1Reg) {
-            a.movsd(getRegister(dstReg), getRegister(src1Reg));
-        }
-        a.mulsd(getRegister(dstReg), getRegister(src2Reg));
-        
-        // Trace output values after operation
-        tracer.emitTraceXMM(a, getRegister(dstReg), OperationType::MUL, 1);
-    }
-    
-    void emitDiv3(asmjit::x86::Assembler& a, int dstReg, int src1Reg, int src2Reg) override {
-        // Trace input values before operation
-        tracer.emitTraceXMM(a, getRegister(src1Reg), OperationType::DIV, 1);
-        tracer.emitTraceXMM(a, getRegister(src2Reg), OperationType::DIV, 1);
-        
-        if (dstReg != src1Reg) {
-            a.movsd(getRegister(dstReg), getRegister(src1Reg));
-        }
-        a.divsd(getRegister(dstReg), getRegister(src2Reg));
-        
-        // Trace output values after operation
-        tracer.emitTraceXMM(a, getRegister(dstReg), OperationType::DIV, 1);
-    }
-    
     // Unary operations
-    void emitNeg(asmjit::x86::Assembler& a, int dstReg) override {
-        // XOR with sign bit (0x8000000000000000)
-        // This requires a constant from the pool or immediate manipulation
-        // For now, using the subtract from zero approach
-        asmjit::x86::Xmm tmpReg = asmjit::x86::xmm15; // Use highest register as temp
+    void emitNeg(asmjit::x86::Assembler& a, int dstReg, int tempReg) override {
+        // Negate by subtracting from zero: result = 0 - value
+        asmjit::x86::Xmm tmpReg = getRegister(tempReg);
         a.xorpd(tmpReg, tmpReg); // Zero out temp register
         a.subsd(tmpReg, getRegister(dstReg));
         a.movsd(getRegister(dstReg), tmpReg);
-        
+
         // Trace the negated value
         tracer.emitTraceXMM(a, getRegister(dstReg), OperationType::NEG, 1, -1, dstReg, dstReg);
     }
-    
-    void emitAbs(asmjit::x86::Assembler& a, int dstReg) override {
+
+    void emitAbs(asmjit::x86::Assembler& a, int dstReg, int tempReg) override {
         // Clear the sign bit using AND with 0x7FFFFFFFFFFFFFFF
         asmjit::x86::Xmm reg = getRegister(dstReg);
-        asmjit::x86::Xmm tmpReg = asmjit::x86::xmm15;
-        
+        asmjit::x86::Xmm tmpReg = getRegister(tempReg);
+
         // Create mask with all bits set except sign bit
         a.pcmpeqd(tmpReg, tmpReg); // All ones
         a.psrlq(tmpReg, 1);        // Shift right to clear sign bit
         a.andpd(reg, tmpReg);      // Apply mask
-        
+
         // Trace the absolute value
         tracer.emitTraceXMM(a, reg, OperationType::ABS, 1, -1, dstReg, dstReg);
     }
@@ -171,28 +112,14 @@ public:
     void emitSqrt(asmjit::x86::Assembler& a, int dstReg) override {
         // Trace input values before operation
         tracer.emitTraceXMM(a, getRegister(dstReg), OperationType::SQRT, 1);
-        
+
         // Perform the operation
         a.sqrtsd(getRegister(dstReg), getRegister(dstReg));
-        
+
         // Trace output values after operation
         tracer.emitTraceXMM(a, getRegister(dstReg), OperationType::SQRT, 1);
     }
-    
-    void emitRecip(asmjit::x86::Assembler& a, int dstReg) override {
-        // 1.0 / x - requires a constant 1.0
-        // This would typically come from the constant pool
-        // For now, using division approach
-        asmjit::x86::Xmm tmpReg = asmjit::x86::xmm15;
-        a.mov(asmjit::x86::rax, 0x3FF0000000000000ULL); // 1.0 in double format
-        a.movq(tmpReg, asmjit::x86::rax);
-        a.divsd(tmpReg, getRegister(dstReg));
-        a.movsd(getRegister(dstReg), tmpReg);
-        
-        // Trace the reciprocal value
-        tracer.emitTraceXMM(a, getRegister(dstReg), OperationType::RECIP, 1, -1, dstReg, dstReg);
-    }
-    
+
     // Memory operations
     void emitLoad(asmjit::x86::Assembler& a, int dstReg, forge::NodeId nodeId) override {
         // Load from workspace (RDI points to workspace)
@@ -268,26 +195,6 @@ public:
         a.cmpsd(getRegister(dstReg), getRegister(rhsReg), 4); // _CMP_NEQ_UQ
         // Trace the comparison result
         tracer.emitTraceXMM(a, getRegister(dstReg), OperationType::CMP_NE, 1, -1, rhsReg, dstReg);
-    }
-    
-    // Create a mask from a boolean value (0.0 or 1.0 -> all-zeros or all-ones)
-    void emitCreateMaskFromBool(asmjit::x86::Assembler& a, int dstReg, int srcReg) override {
-        // Compare srcReg != 0.0 to create mask
-        asmjit::x86::Xmm dst = getRegister(dstReg);
-        asmjit::x86::Xmm src = getRegister(srcReg);
-        
-        // Copy boolean value to dst
-        a.movsd(dst, src);
-        
-        // Create zero by XORing dst with itself temporarily
-        // We'll use a temp register approach instead of hardcoded XMM14
-        asmjit::x86::Xmm temp = asmjit::x86::xmm15;  // Use XMM15 as temp
-        a.xorpd(temp, temp);  // temp = 0.0
-        
-        // Compare dst != 0.0
-        a.cmpsd(dst, temp, 4);  // NEQ: all-ones if boolean != 0.0, all-zeros if == 0.0
-        
-        // dst now contains the mask
     }
     
     // Min/Max operations
@@ -624,15 +531,6 @@ public:
         
         // Ensure result is truncated to integer
         a.roundsd(getRegister(dstReg), getRegister(dstReg), 3);
-    }
-    
-    // Blending/conditional move based on mask
-    void emitBlend(asmjit::x86::Assembler& a, int dstReg, int srcReg, int maskReg) override {
-        // maskReg must be in XMM0 for blendvpd
-        if (maskReg != 0) {
-            a.movsd(asmjit::x86::xmm0, getRegister(maskReg));
-        }
-        a.blendvpd(getRegister(dstReg), getRegister(srcReg), asmjit::x86::xmm0);
     }
     
     // Zero out a register

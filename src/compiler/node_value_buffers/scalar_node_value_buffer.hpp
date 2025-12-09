@@ -21,51 +21,6 @@ namespace forge {
  */
 class ScalarNodeValueBuffer : public INodeValueBuffer {
 public:
-    explicit ScalarNodeValueBuffer(const forge::Graph& tape)
-        : num_nodes_(tape.nodes.size()) {
-        diff_inputs_ = tape.diff_inputs;
-        // Build hash set for O(1) lookup in getGradient()
-        diff_inputs_set_.insert(diff_inputs_.begin(), diff_inputs_.end());
-        // Initialize identity mapping
-        originalToOptimizedMapping_.resize(tape.nodes.size());
-        for (size_t i = 0; i < tape.nodes.size(); ++i) {
-            originalToOptimizedMapping_[i] = i;
-        }
-
-        // Allocate values - one double per node
-        size_t totalDoubles = num_nodes_;
-
-        // Safety check: ensure we allocate at least some memory
-        if (totalDoubles == 0) {
-            totalDoubles = 1;  // At least one double
-        }
-
-        // Calculate allocation size - must be multiple of alignment for aligned_alloc on Linux
-        size_t allocSize = totalDoubles * sizeof(double);
-        size_t alignedAllocSize = (allocSize + 63) & ~size_t(63);  // Round up to multiple of 64
-
-        // Platform-specific aligned allocation
-#ifdef _WIN32
-        values_ = static_cast<double*>(_aligned_malloc(allocSize, 64));
-#else
-        values_ = static_cast<double*>(aligned_alloc(64, alignedAllocSize));
-#endif
-        if (!values_) {
-            throw std::bad_alloc();
-        }
-        std::memset(values_, 0, allocSize);
-
-        // Allocate gradients if needed
-        if (!diff_inputs_.empty()) {
-#ifdef _WIN32
-            gradients_ = static_cast<double*>(_aligned_malloc(allocSize, 64));
-#else
-            gradients_ = static_cast<double*>(aligned_alloc(64, alignedAllocSize));
-#endif
-            std::memset(gradients_, 0, allocSize);
-        }
-    }
-
     // Constructor with node ID mapping
     ScalarNodeValueBuffer(const forge::Graph& tape,
                           const std::vector<forge::NodeId>& originalToOptimizedMapping)
@@ -154,14 +109,6 @@ public:
         if (!gradients_) return;
         for (size_t i = 0; i < bufferIndices.size(); ++i) {
             output[i] = gradients_[bufferIndices[i]];
-        }
-    }
-
-    // Deprecated: separate lane pointers (for scalar, only outputs[0] is filled)
-    void getGradientLanesSeparate(const std::vector<size_t>& bufferIndices, double* outputs[4]) const override {
-        if (!gradients_ || !outputs[0]) return;
-        for (size_t i = 0; i < bufferIndices.size(); ++i) {
-            outputs[0][i] = gradients_[bufferIndices[i]];
         }
     }
 

@@ -59,97 +59,10 @@ class InstructionTracer {
 private:
     const CompilerConfig& config;
     uint32_t instructionCounter;
-    
-    // Smart corruption detection - the core intelligence
-    struct CorruptionPattern {
-        bool hasNaN = false;
-        bool hasInf = false;
-        bool hasSuspiciousZeros = false;
-        bool hasKnownPatterns = false;
-        bool hasPartialCorruption = false;
-        int corruptedLanes = 0;
-        double suspiciousValue = 0.0;
-        
-        bool isCorrupted() const {
-            return hasNaN || hasInf || hasSuspiciousZeros || hasKnownPatterns || hasPartialCorruption;
-        }
-        
-        const char* getDescription() const {
-            if (hasNaN) return "NaN_CORRUPTION";
-            if (hasInf) return "INF_CORRUPTION"; 
-            if (hasKnownPatterns) return "KNOWN_PATTERN_CORRUPTION";
-            if (hasSuspiciousZeros) return "ZERO_CORRUPTION";
-            if (hasPartialCorruption) return "PARTIAL_CORRUPTION";
-            return "NO_CORRUPTION";
-        }
-    };
-    
-    // Analyze vector data for corruption patterns
-    CorruptionPattern analyzeCorruption(const double* data, int vectorWidth) const {
-        CorruptionPattern pattern;
-        
-        if (!config.enableSmartTraceFilter) return pattern;  // No smart filtering
-        
-        int validLanes = 0;
-        
-        for (int i = 0; i < vectorWidth; i++) {
-            double val = data[i];
-            
-            // NaN/Inf detection
-            if (config.detectNaNCorruption && std::isnan(val)) {
-                pattern.hasNaN = true;
-                pattern.corruptedLanes++;
-            } else if (config.detectInfCorruption && std::isinf(val)) {
-                pattern.hasInf = true;
-                pattern.corruptedLanes++;
-            } else {
-                validLanes++;
-                
-                // Pattern-specific corruption detection
-                if (config.detectPatternCorruption) {
-                    // Known corruption patterns: 0.002, 0.003 etc.
-                    if (std::abs(val - 0.002) < 1e-12 || std::abs(val - 0.003) < 1e-12) {
-                        pattern.hasKnownPatterns = true;
-                        pattern.suspiciousValue = val;
-                    }
-                }
-                
-                // Zero corruption (lanes 2-3 being zero in AVX2)
-                if (config.detectZeroCorruption && vectorWidth == 4 && i >= 2 && val == 0.0) {
-                    // Only suspicious if earlier lanes have non-zero values
-                    bool earlierLanesNonZero = false;
-                    for (int j = 0; j < i; j++) {
-                        if (data[j] != 0.0) {
-                            earlierLanesNonZero = true;
-                            break;
-                        }
-                    }
-                    if (earlierLanesNonZero) {
-                        pattern.hasSuspiciousZeros = true;
-                        pattern.corruptedLanes++;
-                    }
-                }
-            }
-        }
-        
-        // Partial corruption detection (some lanes work, others don't)
-        if (config.detectPartialCorruption && vectorWidth > 1) {
-            if (validLanes > 0 && validLanes < vectorWidth) {
-                pattern.hasPartialCorruption = true;
-            }
-        }
-        
-        return pattern;
-    }
-    
-    // Check if we should trace based on smart filtering
-    bool shouldTraceWithSmartFilter(OperationType opType) const {
-        if (!config.printRuntimeTrace) return false;
-        if (!config.enableSmartTraceFilter) return true;  // No smart filtering, trace everything
-        
-        // This will be called during compilation, so we can't analyze data yet
-        // We'll do a runtime check in the generated code
-        return true;  // Always emit tracing code, filter at runtime
+
+    // Check if we should trace
+    bool shouldTrace() const {
+        return config.printRuntimeTrace;
     }
     
 public:
@@ -162,25 +75,8 @@ public:
     InstructionTracer(const CompilerConfig& cfg) : config(cfg), instructionCounter(0) {
         // Initialize the trace buffer if tracing is enabled
         if (config.printRuntimeTrace) {
-            std::cout << "[Compiling] Runtime tracing enabled";
-            if (config.enableSmartTraceFilter) {
-                std::cout << " with smart filtering";
-            }
-            std::cout << std::endl;
-            
+            std::cout << "[Compiling] Runtime tracing enabled" << std::endl;
             initializeTraceBuffer(1024); // Initialize with 1024 records
-            
-            // Configure smart filtering at runtime
-            RuntimeFilterConfig runtimeConfig;
-            runtimeConfig.enableSmartFilter = config.enableSmartTraceFilter;
-            runtimeConfig.traceCorruptedOnly = config.traceCorruptedOnly;
-            runtimeConfig.detectNaN = config.detectNaNCorruption;
-            runtimeConfig.detectInf = config.detectInfCorruption;
-            runtimeConfig.detectZeroCorruption = config.detectZeroCorruption;
-            runtimeConfig.detectKnownPatterns = config.detectPatternCorruption;
-            runtimeConfig.detectPartialCorruption = config.detectPartialCorruption;
-            
-            configureSmartFiltering(runtimeConfig);
         }
     }
     
@@ -204,28 +100,25 @@ public:
      */
     void emitTraceYMM(asmjit::x86::Assembler& a, asmjit::x86::Ymm liveReg, 
                          OperationType opType, int vectorWidth = 4, int nodeId = -1, int srcReg = -1, int dstReg = -1) {
-            if (!shouldTraceWithSmartFilter(opType)) {
+            if (!shouldTrace()) {
                 return;
             }
-            
-            // Skip compile-time tracing when smart filtering is enabled
-            if (!config.enableSmartTraceFilter) {
-                // Limit compile-time trace to first 50 operations
-                if (instructionCounter < 50) {
-                    // Concise compile-time trace message
-                    if (instructionCounter == 0) {
-                        std::cout << "[Compiling] Trace points (first 50): ";
-                    }
-                    std::cout << getOperationName(static_cast<uint32_t>(opType)) << "(" << dstReg << "," << srcReg << ") ";
-                    // Print newline after a few operations to avoid long lines
-                    if ((instructionCounter + 1) % 5 == 0) {
-                        std::cout << std::endl << "                        ";
-                    }
-                } else if (instructionCounter == 50) {
-                    std::cout << "... (trace output limited to 50 operations)" << std::endl;
+
+            // Limit compile-time trace to first 50 operations
+            if (instructionCounter < 50) {
+                // Concise compile-time trace message
+                if (instructionCounter == 0) {
+                    std::cout << "[Compiling] Trace points (first 50): ";
                 }
+                std::cout << getOperationName(static_cast<uint32_t>(opType)) << "(" << dstReg << "," << srcReg << ") ";
+                // Print newline after a few operations to avoid long lines
+                if ((instructionCounter + 1) % 5 == 0) {
+                    std::cout << std::endl << "                        ";
+                }
+            } else if (instructionCounter == 50) {
+                std::cout << "... (trace output limited to 50 operations)" << std::endl;
             }
-            
+
             using namespace asmjit::x86;
             
             // ULTRA-SAFE PATTERN: Direct memory writes only, no function calls
@@ -338,33 +231,30 @@ public:
      */
     void emitTraceXMM(asmjit::x86::Assembler& a, asmjit::x86::Xmm liveReg, 
                      OperationType opType, int vectorWidth = 1, int nodeId = -1, int srcReg = -1, int dstReg = -1) {
-        if (!shouldTraceWithSmartFilter(opType)) {
+        if (!shouldTrace()) {
             return;
         }
-        
-        // Skip compile-time tracing when smart filtering is enabled
-        if (!config.enableSmartTraceFilter) {
-            // Limit compile-time trace to first 50 operations
-            if (instructionCounter < 50) {
-                // Concise compile-time trace message (same as AVX2)
-                if (instructionCounter == 0) {
-                    std::cout << "[Compiling] Trace points (first 50): ";
-                }
-                std::cout << getOperationName(static_cast<uint32_t>(opType)) << "(" << dstReg << "," << srcReg << ") ";
-                // Print newline after a few operations to avoid long lines
-                if ((instructionCounter + 1) % 5 == 0) {
-                    std::cout << std::endl << "                        ";
-                }
-            } else if (instructionCounter == 50) {
-                std::cout << "... (trace output limited to 50 operations)" << std::endl;
+
+        // Limit compile-time trace to first 50 operations
+        if (instructionCounter < 50) {
+            // Concise compile-time trace message (same as AVX2)
+            if (instructionCounter == 0) {
+                std::cout << "[Compiling] Trace points (first 50): ";
             }
+            std::cout << getOperationName(static_cast<uint32_t>(opType)) << "(" << dstReg << "," << srcReg << ") ";
+            // Print newline after a few operations to avoid long lines
+            if ((instructionCounter + 1) % 5 == 0) {
+                std::cout << std::endl << "                        ";
+            }
+        } else if (instructionCounter == 50) {
+            std::cout << "... (trace output limited to 50 operations)" << std::endl;
         }
-        
+
         using namespace asmjit::x86;
-        
+
         // ULTRA-SAFE PATTERN: Direct memory writes only, no function calls
         // This completely avoids ABI, stack, and register preservation issues
-        
+
         // 1) Duplicate the live register to a temporary register (never modify the original)
         // CRITICAL: We must save XMM15 first since it might be in use by the compiled code!
         asmjit::x86::Xmm tempReg = asmjit::x86::xmm15; // Use XMM15 as temporary

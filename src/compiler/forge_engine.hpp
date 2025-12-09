@@ -133,19 +133,9 @@ private:
     // Phase 2.3: Register tracking for optimization
     // Now creates appropriate allocator based on instruction set
     std::unique_ptr<IRegisterAllocator> createRegisterAllocator() const;
-    
-    // Phase 2.4: Block-based compilation structures
-    struct FusionBlock {
-        forge::NodeId startNode;
-        forge::NodeId endNode;  // Exclusive
-        std::vector<forge::NodeId> liveOut;  // Nodes needed after block
-    };
 
     // Forward pass code generation has been migrated to forward_stitcher.cpp
     // See ForwardStitcher class for implementation
-
-    // Phase 2.4: Block-based compilation helpers
-    std::vector<FusionBlock> identifyFusionBlocks(const forge::Graph& graph);
 };
 
 /**

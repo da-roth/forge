@@ -62,16 +62,6 @@ public:
      */
     virtual void getGradientLanes(const std::vector<size_t>& bufferIndices, double* output) const = 0;
 
-    /**
-     * @deprecated Use getGradientLanes(bufferIndices, double* output) instead.
-     * Get gradients for multiple nodes with separate lane pointers.
-     * @param bufferIndices Pre-computed buffer indices (from getBufferIndex)
-     * @param outputs Array of 4 pointers, one per lane. Each must have space for bufferIndices.size() doubles.
-     *                For scalar buffers, only outputs[0] is filled.
-     */
-    [[deprecated("Use getGradientLanes(bufferIndices, double* output) for consistent API")]]
-    virtual void getGradientLanesSeparate(const std::vector<size_t>& bufferIndices, double* outputs[4]) const = 0;
-
     // ==========================================================================
     // DEPRECATED API: Convenience wrappers (internally use Lanes)
     // ==========================================================================
@@ -135,12 +125,6 @@ public:
     static std::unique_ptr<INodeValueBuffer> create(
         const forge::Graph& tape,
         const StitchedKernel& kernel);
-
-    // New method that accepts node ID mapping
-    static std::unique_ptr<INodeValueBuffer> create(
-        const forge::Graph& tape,
-        const StitchedKernel& kernel,
-        const std::vector<forge::NodeId>& originalToOptimizedMapping);
 };
 
 } // namespace forge

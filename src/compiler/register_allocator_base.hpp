@@ -299,14 +299,7 @@ public:
             }
         }
     }
-    
-    bool isBlacklisted(int regIndex) const {
-        if (regIndex >= 0 && regIndex < NUM_REGS) {
-            return blacklisted_[regIndex];
-        }
-        return false;
-    }
-    
+
 protected:
     // Helper to get register count
     static constexpr int getRegisterCount() { return NUM_REGS; }
