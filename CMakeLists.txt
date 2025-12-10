@@ -38,28 +38,40 @@ if(MSVC AND FORGE_USE_STATIC_RUNTIME)
 endif()
 
 # Compiler-specific settings
+# IMPORTANT: We use variables (FORGE_COMPILE_OPTIONS, FORGE_LINK_OPTIONS) instead of
+# add_compile_options() because when Forge is used as a subdirectory in another project
+# (e.g., via QL_EXTERNAL_SUBDIRECTORIES), global add_compile_options() would pollute
+# the parent project's compile flags. Options like /arch:AVX2 can cause issues with
+# other libraries that expect different floating-point behavior.
+# These variables are applied to Forge targets via target_compile_options() below.
 if(MSVC AND NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     # MSVC-specific flags (not for clang-cl)
-    add_compile_options(/W4 /permissive-)
-    add_compile_options(/MP)
-    add_compile_options(/Zi /FS)
-    add_compile_options(/GL-)
-    add_compile_options(/arch:AVX2)  # Enable AVX2 instructions and __AVX__ define for SLEEF
-    add_link_options(/DEBUG:FULL /INCREMENTAL:NO)
-    add_compile_options(/wd4996 /wd4100 /wd4189 /wd4456 /wd4702 /wd4244 /wd4267)
+    set(FORGE_COMPILE_OPTIONS
+        /W4 /permissive-
+        /MP
+        /Zi /FS
+        /GL-
+        /arch:AVX2  # Enable AVX2 instructions and __AVX__ define for SLEEF
+        /wd4996 /wd4100 /wd4189 /wd4456 /wd4702 /wd4244 /wd4267
+    )
+    set(FORGE_LINK_OPTIONS /DEBUG:FULL /INCREMENTAL:NO)
 elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND MSVC)
     # clang-cl specific flags
-    add_compile_options(/W4 /permissive-)
-    add_compile_options(/Zi)
-    add_compile_options(/arch:AVX2)  # Enable AVX2 instructions and __AVX__ define for SLEEF
-    add_link_options(/DEBUG:FULL)
-    add_compile_options(/wd4996 /wd4100 /wd4189 /wd4456 /wd4702 /wd4244 /wd4267)
+    set(FORGE_COMPILE_OPTIONS
+        /W4 /permissive-
+        /Zi
+        /arch:AVX2  # Enable AVX2 instructions and __AVX__ define for SLEEF
+        /wd4996 /wd4100 /wd4189 /wd4456 /wd4702 /wd4244 /wd4267
+    )
+    set(FORGE_LINK_OPTIONS /DEBUG:FULL)
 else()
-    add_compile_options(-Wall -Wextra -Wpedantic)
-    add_compile_options(-g)
-    add_compile_options(-mavx2)  # Enable AVX2 instructions for SLEEF
-    add_compile_options(-fno-lto)
-    add_link_options(-fno-lto)
+    set(FORGE_COMPILE_OPTIONS
+        -Wall -Wextra -Wpedantic
+        -g
+        -mavx2  # Enable AVX2 instructions for SLEEF
+        -fno-lto
+    )
+    set(FORGE_LINK_OPTIONS -fno-lto)
 endif()
 
 # Output directories
@@ -111,9 +123,11 @@ set(BUILD_INLINE_HEADERS ON CACHE BOOL "Build SLEEF inline headers" FORCE)
 set(SLEEF_BUILD_SCALAR_LIB OFF CACHE BOOL "Don't build scalar library" FORCE)
 FetchContent_MakeAvailable(sleef)
 
-# Include directories
-include_directories(${CMAKE_SOURCE_DIR}/src)
-include_directories(${CMAKE_SOURCE_DIR}/tools)
+# Include directories - REMOVED global include_directories() calls
+# Previously used include_directories(${CMAKE_SOURCE_DIR}/src) which is WRONG when
+# Forge is used as a subdirectory (CMAKE_SOURCE_DIR would be the parent project).
+# All includes are now handled via target_include_directories() below using
+# CMAKE_CURRENT_SOURCE_DIR which correctly points to the Forge directory.
 
 # Main Forge library
 add_library(forge STATIC
@@ -184,11 +198,15 @@ add_library(forge STATIC
 # Note: We need both the AVX2-specific library and the main sleef library for helper functions
 target_link_libraries(forge PUBLIC asmjit nlohmann_json::nlohmann_json sleefavx2 sleef)
 target_include_directories(forge PUBLIC
-    ${CMAKE_SOURCE_DIR}/src
-    ${CMAKE_SOURCE_DIR}/tools
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/tools
     ${asmjit_SOURCE_DIR}/src
     ${sleef_BINARY_DIR}/include
 )
+
+# Apply Forge-specific compile and link options (PRIVATE so they don't propagate to dependents)
+target_compile_options(forge PRIVATE ${FORGE_COMPILE_OPTIONS})
+target_link_options(forge PRIVATE ${FORGE_LINK_OPTIONS})
 
 # Define SLEEF_STATIC_LIBS for static linking on Windows
 target_compile_definitions(forge PUBLIC SLEEF_STATIC_LIBS)
