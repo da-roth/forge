@@ -1,0 +1,9 @@
+@PACKAGE_INIT@
+
+# ForgeCAPIConfig.cmake - CMake configuration for Forge C API
+
+include("${CMAKE_CURRENT_LIST_DIR}/ForgeCAPITargets.cmake")
+
+check_required_components(ForgeCAPI)
+
+set(ForgeCAPI_FOUND TRUE)
