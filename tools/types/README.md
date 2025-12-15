@@ -95,13 +95,38 @@ Used for conditions and control flow.
 - Logical OR: `a || b`
 - Logical NOT: `!a`
 
-**Conditional selection:**
+**Conditional selection with `If()`:**
+
+Using native C++ `if` statements only records the branch taken during graph construction:
+
 ```cpp
-fbool condition = x > 0.0;
-fdouble result = If(condition, trueValue, falseValue);
+fdouble x(5.0);  // x > 0 during recording
+x.markInputAndDiff();
+
+fdouble result;
+if (x.value() > 0)      // Native C++ if - evaluated at recording time
+    result = fdouble(1.0);
+else
+    result = fdouble(2.0);
+
+result.markOutput();
+// The kernel will ALWAYS return 1.0, even when re-evaluated with x = -10
 ```
 
-The `If()` function records both branches in the graph. At runtime, the correct path is selected based on input values — enabling JIT re-evaluation even when inputs take different branches.
+With `fbool` and `If()`, both branches are recorded in the graph:
+
+```cpp
+fdouble x(5.0);
+x.markInputAndDiff();
+
+fbool condition = x > 0.0;
+fdouble result = If(condition, fdouble(1.0), fdouble(2.0));
+
+result.markOutput();
+// The kernel correctly returns 1.0 for x > 0, and 2.0 for x <= 0
+```
+
+The compiled kernel can now be re-evaluated with any input value and will select the correct branch at runtime.
 
 ### fint — Integer Type
 

@@ -20,7 +20,7 @@ Forge is designed for **repeated evaluation** scenarios where the computation st
 
 **Trade-off**: Forge incurs an upfront compilation cost. For single evaluations, traditional tape-based AD is faster. The break-even depends on graph complexity, but typically occurs after 10–50 repeated evaluations.
 
-**Important**: The recorded computation graph must have the same structure for all inputs. For functions with branches, use `fbool` and `If()` to record both paths — the correct branch is selected at runtime based on input values.
+**Important**: The recorded computation graph must have the same structure for all inputs. For functions with branches, see [tools/types/](tools/types/) for how to record both paths using `fbool` and `If()`.
 
 ## Key Features
 
@@ -33,7 +33,26 @@ Forge is designed for **repeated evaluation** scenarios where the computation st
 
 Forge provides two ways to build computation graphs:
 
-### Option 1: Operator Overloading (Recommended for new code)
+### Option 1: Direct Graph API (For framework integration)
+
+Build graphs programmatically — useful for transforming existing computation graphs (e.g., from other AD frameworks) into Forge format:
+
+```cpp
+Graph graph;
+NodeId x = graph.addInput();
+NodeId x_sq = graph.addNode({OpCode::Square, 0, x});
+NodeId sin_x = graph.addNode({OpCode::Sin, 0, x});
+NodeId result = graph.addNode({OpCode::Add, 0, x_sq, sin_x});
+graph.markOutput(result);
+graph.diff_inputs.push_back(x);
+
+ForgeEngine compiler;
+auto kernel = compiler.compile(graph);
+```
+
+See [src/graph/graph.hpp](src/graph/graph.hpp) for the full Graph API and available `OpCode` values.
+
+### Option 2: Operator Overloading
 
 Use `fdouble`, `fbool`, `fint` types for natural C++ syntax:
 
@@ -54,25 +73,6 @@ auto kernel = compiler.compile(graph);
 ```
 
 See [tools/types/](tools/types/) for supported operations and [examples/](examples/) for complete examples.
-
-### Option 2: Direct Graph API (For framework integration)
-
-Build graphs programmatically — useful for transforming existing computation graphs (e.g., from other AD frameworks) into Forge format:
-
-```cpp
-Graph graph;
-NodeId x = graph.addInput();
-NodeId x_sq = graph.addNode({OpCode::Square, 0, x});
-NodeId sin_x = graph.addNode({OpCode::Sin, 0, x});
-NodeId result = graph.addNode({OpCode::Add, 0, x_sq, sin_x});
-graph.markOutput(result);
-graph.diff_inputs.push_back(x);
-
-ForgeEngine compiler;
-auto kernel = compiler.compile(graph);
-```
-
-See [src/graph/graph.hpp](src/graph/graph.hpp) for the full Graph API and available `OpCode` values.
 
 ## Architecture Overview
 
