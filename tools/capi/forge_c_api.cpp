@@ -567,6 +567,15 @@ FORGE_API size_t forge_buffer_get_num_nodes(ForgeBufferHandle buffer) {
     return static_cast<size_t>(buffer->buffer->getNumNodes());
 }
 
+FORGE_API size_t forge_buffer_get_index(ForgeBufferHandle buffer, uint32_t node_id) {
+    if (!buffer || !buffer->buffer) return SIZE_MAX;
+    try {
+        return buffer->buffer->getBufferIndex(node_id);
+    } catch (...) {
+        return SIZE_MAX;
+    }
+}
+
 // ==========================================================================
 // Execution API
 // ==========================================================================

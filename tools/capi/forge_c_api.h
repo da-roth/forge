@@ -401,6 +401,12 @@ FORGE_API int forge_buffer_get_vector_width(ForgeBufferHandle buffer);
  */
 FORGE_API size_t forge_buffer_get_num_nodes(ForgeBufferHandle buffer);
 
+/**
+ * Get the buffer index for a node ID.
+ * Returns SIZE_MAX on error.
+ */
+FORGE_API size_t forge_buffer_get_index(ForgeBufferHandle buffer, uint32_t node_id);
+
 /* ==========================================================================
  * Execution API
  * ========================================================================== */
