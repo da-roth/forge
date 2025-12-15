@@ -76,10 +76,16 @@ target_compile_definitions(forge_capi PRIVATE
     FORGE_VERSION_PATCH=${PROJECT_VERSION_PATCH}
 )
 
-# Include directories for building
+# Include directories for building (PRIVATE = internal forge headers)
 target_include_directories(forge_capi PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src
     ${CMAKE_CURRENT_SOURCE_DIR}/../../tools
+)
+
+# Public include directory for consumers (forge_c_api.h)
+target_include_directories(forge_capi PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
 
 # Link forge and its dependencies statically into the shared library
