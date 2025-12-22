@@ -4,7 +4,7 @@
 #include <atomic>
 #include <chrono>
 #include <cmath>
-#include "../tools/types/fdouble.hpp"
+#include <native/fdouble.hpp>
 #include "../src/graph/graph_recorder.hpp"
 #include "../src/compiler/forge_engine.hpp"
 #include "../src/compiler/compiler_config.hpp"

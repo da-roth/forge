@@ -4,13 +4,13 @@ on:
   push:
     branches: [ main, develop, 'v*' ]
     paths:
-      - 'tools/capi/**'
+      - 'api/c/**'
       - 'src/**'
       - '.github/workflows/ci-capi.yml'
   pull_request:
     branches: [ main, develop ]
     paths:
-      - 'tools/capi/**'
+      - 'api/c/**'
       - 'src/**'
       - '.github/workflows/ci-capi.yml'
   workflow_dispatch:
@@ -39,7 +39,7 @@ jobs:
 
       - name: Configure
         run: |
-          cmake -B build -S tools/capi -G Ninja `
+          cmake -B build -S api/c -G Ninja `
             -DCMAKE_BUILD_TYPE=${{ matrix.config }} `
             -DFORGE_CAPI_BUILD_TESTS=ON
 
@@ -58,7 +58,7 @@ jobs:
           path: |
             build/forge_capi.dll
             build/forge_capi.lib
-            tools/capi/forge_c_api.h
+            api/c/forge_c_api.h
 
   build_linux:
     name: Linux
@@ -80,7 +80,7 @@ jobs:
 
       - name: Configure
         run: |
-          cmake -B build -S tools/capi -G Ninja \
+          cmake -B build -S api/c -G Ninja \
             -DCMAKE_BUILD_TYPE=${{ matrix.config }} \
             -DFORGE_CAPI_BUILD_TESTS=ON
 
@@ -98,7 +98,7 @@ jobs:
           name: forge-capi-linux-${{ matrix.config }}
           path: |
             build/libforge_capi.so*
-            tools/capi/forge_c_api.h
+            api/c/forge_c_api.h
 
   build_macos:
     name: macOS
@@ -120,7 +120,7 @@ jobs:
 
       - name: Configure
         run: |
-          cmake -B build -S tools/capi -G Ninja \
+          cmake -B build -S api/c -G Ninja \
             -DCMAKE_BUILD_TYPE=${{ matrix.config }} \
             -DFORGE_CAPI_BUILD_TESTS=ON
 
@@ -138,7 +138,7 @@ jobs:
           name: forge-capi-macos-${{ matrix.config }}
           path: |
             build/libforge_capi.dylib
-            tools/capi/forge_c_api.h
+            api/c/forge_c_api.h
 
   build_macos_arm:
     name: macOS ARM
@@ -160,7 +160,7 @@ jobs:
 
       - name: Configure
         run: |
-          cmake -B build -S tools/capi -G Ninja \
+          cmake -B build -S api/c -G Ninja \
             -DCMAKE_BUILD_TYPE=${{ matrix.config }} \
             -DFORGE_CAPI_BUILD_TESTS=ON
 
@@ -178,4 +178,4 @@ jobs:
           name: forge-capi-macos-arm-${{ matrix.config }}
           path: |
             build/libforge_capi.dylib
-            tools/capi/forge_c_api.h
+            api/c/forge_c_api.h

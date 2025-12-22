@@ -9,7 +9,7 @@
 #include <algorithm>
 #include <numeric>
 #include <limits>
-#include "../../tools/types/fdouble.hpp"
+#include <native/fdouble.hpp>
 #include "../../src/graph/graph_recorder.hpp"
 #include "../../src/graph/graph_optimizer.hpp"
 #include "../../src/compiler/forge_engine.hpp"

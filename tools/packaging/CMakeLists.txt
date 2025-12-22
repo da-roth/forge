@@ -50,14 +50,16 @@ message(STATUS "Original forge include dirs: ${FORGE_INCLUDE_DIRS}")
 set_target_properties(forge PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "")
 
 # Add include directories with BUILD_INTERFACE and INSTALL_INTERFACE
-# For build: point to forge/src and forge/tools directly
-# For install: point to include/src and include/tools (preserving structure)
+# For build: point to forge/src, forge/api, and forge/tools directly
+# For install: point to include/src, include/api, and include/tools (preserving structure)
 target_include_directories(forge INTERFACE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../../src>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../../api>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../../tools>
     $<BUILD_INTERFACE:${FETCHCONTENT_BASE_DIR}/asmjit-src/src>
     $<BUILD_INTERFACE:${FETCHCONTENT_BASE_DIR}/sleef-build/include>
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/src>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/api>
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/tools>
 )
 
@@ -117,10 +119,15 @@ install(TARGETS forge
     INCLUDES DESTINATION ${FORGE_INSTALL_INCLUDEDIR}
 )
 
-# Install header files preserving the src/ and tools/ directory structure
+# Install header files preserving the src/, api/, and tools/ directory structure
 # This is necessary because headers use relative includes like "../../src/graph/graph.hpp"
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/../../src/
     DESTINATION ${FORGE_INSTALL_INCLUDEDIR}/src
+    FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
+)
+
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/../../api/
+    DESTINATION ${FORGE_INSTALL_INCLUDEDIR}/api
     FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
 )
 
