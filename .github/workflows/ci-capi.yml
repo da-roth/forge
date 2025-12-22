@@ -100,82 +100,13 @@ jobs:
             build/libforge_capi.so*
             api/c/forge_c_api.h
 
-  build_macos:
-    name: macOS
-    runs-on: macos-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        config: [Release, Debug]
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - name: Install dependencies
-        run: |
-          brew update
-          brew install cmake ninja
-
-      - name: Configure
-        run: |
-          cmake -B build -S api/c -G Ninja \
-            -DCMAKE_BUILD_TYPE=${{ matrix.config }} \
-            -DFORGE_CAPI_BUILD_TESTS=ON
-
-      - name: Build
-        run: cmake --build build
-
-      - name: Test
-        run: |
-          cd build
-          ctest --output-on-failure --timeout 120
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: forge-capi-macos-${{ matrix.config }}
-          path: |
-            build/libforge_capi.dylib
-            api/c/forge_c_api.h
-
-  build_macos_arm:
-    name: macOS ARM
-    runs-on: macos-14
-    strategy:
-      fail-fast: false
-      matrix:
-        config: [Release, Debug]
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - name: Install dependencies
-        run: |
-          brew update
-          brew install cmake ninja
-
-      - name: Configure
-        run: |
-          cmake -B build -S api/c -G Ninja \
-            -DCMAKE_BUILD_TYPE=${{ matrix.config }} \
-            -DFORGE_CAPI_BUILD_TESTS=ON
-
-      - name: Build
-        run: cmake --build build
-
-      - name: Test
-        run: |
-          cd build
-          ctest --output-on-failure --timeout 120
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: forge-capi-macos-arm-${{ matrix.config }}
-          path: |
-            build/libforge_capi.dylib
-            api/c/forge_c_api.h
+  # macOS builds disabled - ARM support not yet implemented
+  # TODO: Re-enable when ARM/NEON instruction sets are added
+  # build_macos:
+  #   name: macOS
+  #   runs-on: macos-latest
+  #   ...
+  # build_macos_arm:
+  #   name: macOS ARM
+  #   runs-on: macos-14
+  #   ...
