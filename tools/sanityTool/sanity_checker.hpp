@@ -9,8 +9,8 @@
 #include <chrono>
 #include <limits>
 #include <type_traits>
-#include "../../tools/types/fdouble.hpp"
-#include "../../tools/types/fbool.hpp"
+#include <native/fdouble.hpp>
+#include <native/fbool.hpp>
 #include "../../src/graph/graph_recorder.hpp"
 #include "../../src/compiler/forge_engine.hpp"
 #include "../../src/compiler/node_value_buffers/node_value_buffer.hpp"

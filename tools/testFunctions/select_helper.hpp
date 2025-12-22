@@ -1,7 +1,7 @@
 #pragma once
 
 #include <type_traits>
-#include "../../tools/types/fbool.hpp"
+#include <native/fbool.hpp>
 
 namespace forge {
 namespace tools {

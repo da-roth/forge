@@ -53,12 +53,14 @@ include(CMakePackageConfigHelpers)
 # Use FetchContent cache to avoid re-downloading
 set(FETCHCONTENT_BASE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../../.deps-cache" CACHE PATH "FetchContent cache")
 
+# Note: api/c is two levels deep from forge root (api/c -> api -> forge)
+
 # Disable tests for dependencies
 set(SLEEF_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(FORGE_SKIP_TESTS ON CACHE BOOL "" FORCE)
 
-# Add forge as subdirectory (go up from tools/capi to forge root)
+# Add forge as subdirectory (go up from api/c to forge root)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../.. ${CMAKE_CURRENT_BINARY_DIR}/forge-build EXCLUDE_FROM_ALL)
 
 ##############################################################################
@@ -79,6 +81,7 @@ target_compile_definitions(forge_capi PRIVATE
 # Include directories for building (PRIVATE = internal forge headers)
 target_include_directories(forge_capi PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../../src
+    ${CMAKE_CURRENT_SOURCE_DIR}/..           # For <native/fdouble.hpp> etc.
     ${CMAKE_CURRENT_SOURCE_DIR}/../../tools
 )
 

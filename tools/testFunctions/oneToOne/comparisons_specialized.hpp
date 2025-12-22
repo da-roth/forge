@@ -1,7 +1,7 @@
 #pragma once
 
-#include "../../types/fdouble.hpp"
-#include "../../types/fbool.hpp"
+#include <native/fdouble.hpp>
+#include <native/fbool.hpp>
 
 namespace forge {
 namespace tools {

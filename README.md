@@ -20,7 +20,7 @@ Forge is designed for **repeated evaluation** scenarios where the computation st
 
 **Trade-off**: Forge incurs an upfront compilation cost. For single evaluations, traditional tape-based AD is faster. The break-even depends on graph complexity, but typically occurs after 10–50 repeated evaluations.
 
-**Important**: The recorded computation graph must have the same structure for all inputs. For functions with branches, see [tools/types/](tools/types/) for how to record both paths using `fbool` and `If()`.
+**Important**: The recorded computation graph must have the same structure for all inputs. For functions with branches, see [api/native/](api/native/) for how to record both paths using `fbool` and `If()`.
 
 ## Key Features
 
@@ -72,7 +72,7 @@ ForgeEngine compiler;
 auto kernel = compiler.compile(graph);
 ```
 
-See [tools/types/](tools/types/) for supported operations and [examples/](examples/) for complete examples.
+See [api/native/](api/native/) for supported operations and [examples/](examples/) for complete examples.
 
 ## Architecture Overview
 
@@ -170,7 +170,7 @@ ForgeEngine compiler(config);
 
 ## Documentation
 
-- **Operator Overloading API**: See [tools/types/](tools/types/) for `fdouble`, `fbool`, `fint` documentation
+- **Operator Overloading API**: See [api/native/](api/native/) for `fdouble`, `fbool`, `fint` documentation
 - **Graph API**: See [src/graph/graph.hpp](src/graph/graph.hpp) for `OpCode` definitions and direct graph construction
 - **API Headers**: All public headers include Doxygen documentation
 

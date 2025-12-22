@@ -19,7 +19,7 @@
 #include "../../src/compiler/forge_engine.hpp"
 #include "../../src/compiler/compiler_config.hpp"
 #include "../../src/compiler/node_value_buffers/node_value_buffer.hpp"
-#include "../../tools/types/fdouble.hpp"
+#include <native/fdouble.hpp>
 
 namespace forge {
 namespace tools {

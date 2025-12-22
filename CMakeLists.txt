@@ -131,13 +131,13 @@ FetchContent_MakeAvailable(sleef)
 
 # Main Forge library
 add_library(forge STATIC
-    # Type system files
-    tools/types/fdouble.cpp
-    tools/types/fdouble.hpp
-    tools/types/fbool.cpp
-    tools/types/fbool.hpp
-    tools/types/fint.cpp
-    tools/types/fint.hpp
+    # Native API types (operator-overloading based graph recording)
+    api/native/fdouble.cpp
+    api/native/fdouble.hpp
+    api/native/fbool.cpp
+    api/native/fbool.hpp
+    api/native/fint.cpp
+    api/native/fint.hpp
 
     # Graph/Recording system
     src/graph/graph.cpp
@@ -199,6 +199,7 @@ add_library(forge STATIC
 target_link_libraries(forge PUBLIC asmjit nlohmann_json::nlohmann_json sleefavx2 sleef)
 target_include_directories(forge PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/api          # For api/native/fdouble.hpp -> <native/fdouble.hpp>
     ${CMAKE_CURRENT_SOURCE_DIR}/tools
     ${asmjit_SOURCE_DIR}/src
     ${sleef_BINARY_DIR}/include
