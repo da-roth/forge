@@ -259,6 +259,13 @@ FORGE_API size_t forge_graph_output_count(ForgeGraphHandle graph);
  */
 FORGE_API size_t forge_graph_diff_input_count(ForgeGraphHandle graph);
 
+/**
+ * Propagate needsGradient flags through the graph.
+ * Must be called after marking diff inputs and before compilation.
+ * This marks all nodes that depend on diff inputs as needing gradients.
+ */
+FORGE_API ForgeError forge_graph_propagate_gradients(ForgeGraphHandle graph);
+
 /* ==========================================================================
  * Compiler Configuration API
  * ========================================================================== */

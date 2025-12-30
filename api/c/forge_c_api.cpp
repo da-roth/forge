@@ -287,6 +287,41 @@ FORGE_API size_t forge_graph_diff_input_count(ForgeGraphHandle graph) {
     return graph->graph.diff_inputs.size();
 }
 
+FORGE_API ForgeError forge_graph_propagate_gradients(ForgeGraphHandle graph) {
+    if (!graph) {
+        set_error("Null graph handle");
+        return FORGE_ERROR_NULL_HANDLE;
+    }
+
+    auto& nodes = graph->graph.nodes;
+
+    // First, mark all diff_input nodes as needing gradients
+    for (auto inputId : graph->graph.diff_inputs) {
+        if (inputId < nodes.size()) {
+            nodes[inputId].needsGradient = true;
+        }
+    }
+
+    // Forward propagation: if any operand needs gradient, result needs gradient
+    for (size_t i = 0; i < nodes.size(); ++i) {
+        auto& node = nodes[i];
+        if (node.isDead) continue;
+
+        bool operandNeedsGrad = false;
+        if (node.a < nodes.size())
+            operandNeedsGrad |= nodes[node.a].needsGradient;
+        if (node.b < nodes.size())
+            operandNeedsGrad |= nodes[node.b].needsGradient;
+        if (node.c < nodes.size())
+            operandNeedsGrad |= nodes[node.c].needsGradient;
+
+        if (operandNeedsGrad)
+            node.needsGradient = true;
+    }
+
+    return FORGE_SUCCESS;
+}
+
 // ==========================================================================
 // Compiler Configuration API
 // ==========================================================================

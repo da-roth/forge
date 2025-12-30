@@ -1,0 +1,64 @@
+##############################################################################
+#
+#  Build Forge C API Library
+#
+#  Builds the C API shared library for multiple platforms and makes them
+#  available as downloadable artifacts.
+#
+#  Artifacts are stored for 90 days and can be downloaded from:
+#    Actions → select workflow run → Artifacts section
+#
+#  Copyright (c) 2025 The Forge Authors
+#  SPDX-License-Identifier: Zlib
+#
+##############################################################################
+
+name: Build C API
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact: linux-x64
+
+          - os: windows-latest
+            artifact: windows-x64
+
+          - os: macos-latest
+            artifact: macos-arm64
+
+          - os: macos-13
+            artifact: macos-x64
+
+    runs-on: ${{ matrix.os }}
+    name: ${{ matrix.artifact }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -B build -S api/c -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Install
+        run: cmake --install build --config Release --prefix dist
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: forge-capi-${{ matrix.artifact }}
+          path: dist/
+          retention-days: 90
