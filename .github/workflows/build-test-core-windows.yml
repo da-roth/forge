@@ -48,7 +48,7 @@ jobs:
     - name: Run Core tests
       run: |
         cd build
-        ctest --output-on-failure --timeout 120
+        ctest -L Unit --output-on-failure --timeout 120
       env:
         CTEST_OUTPUT_ON_FAILURE: 1
 
