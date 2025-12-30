@@ -39,48 +39,50 @@ extern "C" double call_std_log(double x) {
 
 // Note: Scalar sin, cos, tan functions removed - now using SLEEF vectorized versions
 
-// Vectorized exp: processes 4 doubles at once using SLEEF
+// =============================================================================
+// SLEEF Wrapper Functions for JIT Calls
+// =============================================================================
+// These wrapper functions are called from JIT-generated code. The JIT code
+// ensures 32-byte stack alignment before calling (required by SLEEF/AVX2).
+// =============================================================================
+
 extern "C" void call_vexp4d(const double* input, double* out) {
     __m256d vinput = _mm256_loadu_pd(input);
     __m256d result = Sleef_expd4_u10avx2(vinput);
     _mm256_storeu_pd(out, result);
 }
 
-// Vectorized log: processes 4 doubles at once using SLEEF
 extern "C" void call_vlog4d(const double* input, double* out) {
     __m256d vinput = _mm256_loadu_pd(input);
     __m256d result = Sleef_logd4_u10avx2(vinput);
     _mm256_storeu_pd(out, result);
 }
 
-// Vectorized sin: processes 4 doubles at once using SLEEF
 extern "C" void call_vsin4d(const double* input, double* out) {
     __m256d vinput = _mm256_loadu_pd(input);
     __m256d result = Sleef_sind4_u10avx2(vinput);
     _mm256_storeu_pd(out, result);
 }
 
-// Vectorized cos: processes 4 doubles at once using SLEEF
 extern "C" void call_vcos4d(const double* input, double* out) {
     __m256d vinput = _mm256_loadu_pd(input);
     __m256d result = Sleef_cosd4_u10avx2(vinput);
     _mm256_storeu_pd(out, result);
 }
 
-// Vectorized tan: processes 4 doubles at once using SLEEF
 extern "C" void call_vtan4d(const double* input, double* out) {
     __m256d vinput = _mm256_loadu_pd(input);
     __m256d result = Sleef_tand4_u10avx2(vinput);
     _mm256_storeu_pd(out, result);
 }
 
-// Vectorized pow: processes 4 doubles at once using SLEEF
 extern "C" void call_vpow4d(const double* base, const double* exp, double* out) {
     __m256d vbase = _mm256_loadu_pd(base);
     __m256d vexp = _mm256_loadu_pd(exp);
     __m256d result = Sleef_powd4_u10avx2(vbase, vexp);
     _mm256_storeu_pd(out, result);
 }
+
 namespace forge {
 
 // Emit negation: dst = -dst

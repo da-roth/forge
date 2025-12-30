@@ -304,23 +304,29 @@ private:
         a.push(rdi);
         a.push(rsi);
 
-        // Allocate space for 2 YMM values (input + result = 64 bytes) plus alignment.
-        // On Windows, include shadow space (32 bytes) in a single allocation.
-        //
+        // Save original RSP in RDI (we'll restore RDI later from stack)
+        a.mov(rdi, rsp);
+
+        // CRITICAL: Align RSP to 32 bytes for AVX2/SLEEF compatibility
+        // SLEEF internally uses aligned AVX instructions that require 32-byte stack alignment.
+        // Windows x64 ABI only guarantees 16-byte alignment, so we must align manually.
+        a.and_(rsp, -32);
+
+        // Allocate space for 2 YMM values (input + result = 64 bytes)
+        // On Windows, include shadow space (32 bytes)
         // Stack layout after allocation:
-        // Windows: [rsp+0..31]=shadow, [rsp+40..71]=input, [rsp+72..103]=result (total: 104)
-        // Linux:   [rsp+8..39]=input, [rsp+40..71]=result (total: 72)
+        // Windows: [rsp+0..31]=shadow, [rsp+32..63]=input, [rsp+64..95]=result (total: 96)
+        // Linux:   [rsp+0..31]=input, [rsp+32..63]=result (total: 64)
 #ifdef _WIN32
-        constexpr int kInputOffset = 40;   // shadow(32) + alignment(8)
-        constexpr int kResultOffset = 72;  // shadow(32) + alignment(8) + input(32)
-        constexpr int kTotalStack = 104;   // shadow(32) + alignment(8) + input(32) + result(32)
+        constexpr int kInputOffset = 32;   // shadow(32)
+        constexpr int kResultOffset = 64;  // shadow(32) + input(32)
+        constexpr int kTotalStack = 96;    // shadow(32) + input(32) + result(32)
 #else
-        constexpr int kInputOffset = 8;
-        constexpr int kResultOffset = 40;
-        constexpr int kTotalStack = 72;    // alignment(8) + input(32) + result(32)
+        constexpr int kInputOffset = 0;
+        constexpr int kResultOffset = 32;
+        constexpr int kTotalStack = 64;    // input(32) + result(32)
 #endif
 
-        // Single stack allocation - all space including shadow space on Windows
         a.sub(rsp, kTotalStack);
 
         // Store input
@@ -331,19 +337,30 @@ private:
         a.lea(rcx, ptr(rsp, kInputOffset));
         a.lea(rdx, ptr(rsp, kResultOffset));
 #else
+        // RDI is holding old RSP, use RSI for first arg temporarily
+        a.mov(rsi, rdi);  // Save old RSP to RSI
         a.lea(rdi, ptr(rsp, kInputOffset));
-        a.lea(rsi, ptr(rsp, kResultOffset));
+        a.push(rsi);  // Save old RSP on stack
+        a.lea(rsi, ptr(rsp, kResultOffset + 8));  // +8 for the push
 #endif
 
         // Call the vectorized function (ONE call for all 4 doubles!)
         a.mov(rax, funcAddr);
         a.call(rax);
 
+#ifndef _WIN32
+        a.pop(rsi);  // Restore old RSP holder
+#endif
+
         // Load result
         a.vmovupd(ymm(dstReg), ymmword_ptr(rsp, kResultOffset));
 
-        // Cleanup stack space
-        a.add(rsp, kTotalStack);
+        // Restore original RSP (which we saved in RDI on Windows, RSI on Linux)
+#ifdef _WIN32
+        a.mov(rsp, rdi);
+#else
+        a.mov(rsp, rsi);
+#endif
 
         // Restore RDI/RSI workspace pointers
         a.pop(rsi);
@@ -370,25 +387,31 @@ private:
         a.push(rdi);
         a.push(rsi);
 
-        // Allocate space for 3 YMM values (arg1 + arg2 + result = 96 bytes) plus alignment.
-        // On Windows, include shadow space (32 bytes) in a single allocation.
-        //
+        // Save original RSP in RDI (we'll restore RDI later from stack)
+        a.mov(rdi, rsp);
+
+        // CRITICAL: Align RSP to 32 bytes for AVX2/SLEEF compatibility
+        // SLEEF internally uses aligned AVX instructions that require 32-byte stack alignment.
+        // Windows x64 ABI only guarantees 16-byte alignment, so we must align manually.
+        a.and_(rsp, -32);
+
+        // Allocate space for 3 YMM values (arg1 + arg2 + result = 96 bytes)
+        // On Windows, include shadow space (32 bytes)
         // Stack layout after allocation:
-        // Windows: [rsp+0..31]=shadow, [rsp+40..71]=arg1, [rsp+72..103]=arg2, [rsp+104..135]=result (total: 136)
-        // Linux:   [rsp+8..39]=arg1, [rsp+40..71]=arg2, [rsp+72..103]=result (total: 104)
+        // Windows: [rsp+0..31]=shadow, [rsp+32..63]=arg1, [rsp+64..95]=arg2, [rsp+96..127]=result (total: 128)
+        // Linux:   [rsp+0..31]=arg1, [rsp+32..63]=arg2, [rsp+64..95]=result (total: 96)
 #ifdef _WIN32
-        constexpr int kArg1Offset = 40;    // shadow(32) + alignment(8)
-        constexpr int kArg2Offset = 72;    // shadow(32) + alignment(8) + arg1(32)
-        constexpr int kResultOffset = 104; // shadow(32) + alignment(8) + arg1(32) + arg2(32)
-        constexpr int kTotalStack = 136;   // shadow(32) + alignment(8) + arg1(32) + arg2(32) + result(32)
+        constexpr int kArg1Offset = 32;    // shadow(32)
+        constexpr int kArg2Offset = 64;    // shadow(32) + arg1(32)
+        constexpr int kResultOffset = 96;  // shadow(32) + arg1(32) + arg2(32)
+        constexpr int kTotalStack = 128;   // shadow(32) + arg1(32) + arg2(32) + result(32)
 #else
-        constexpr int kArg1Offset = 8;
-        constexpr int kArg2Offset = 40;
-        constexpr int kResultOffset = 72;
-        constexpr int kTotalStack = 104;   // alignment(8) + arg1(32) + arg2(32) + result(32)
+        constexpr int kArg1Offset = 0;
+        constexpr int kArg2Offset = 32;
+        constexpr int kResultOffset = 64;
+        constexpr int kTotalStack = 96;    // arg1(32) + arg2(32) + result(32)
 #endif
 
-        // Single stack allocation - all space including shadow space on Windows
         a.sub(rsp, kTotalStack);
 
         // Store arguments
@@ -401,20 +424,31 @@ private:
         a.lea(rdx, ptr(rsp, kArg2Offset));
         a.lea(r8, ptr(rsp, kResultOffset));
 #else
+        // RDI is holding old RSP, use other registers
+        a.mov(rsi, rdi);  // Save old RSP to RSI temporarily
         a.lea(rdi, ptr(rsp, kArg1Offset));
-        a.lea(rsi, ptr(rsp, kArg2Offset));
-        a.lea(rdx, ptr(rsp, kResultOffset));
+        a.push(rsi);  // Save old RSP on stack
+        a.lea(rsi, ptr(rsp, kArg2Offset + 8));  // +8 for the push
+        a.lea(rdx, ptr(rsp, kResultOffset + 8));
 #endif
 
         // Call the vectorized function (ONE call for all 4 doubles!)
         a.mov(rax, funcAddr);
         a.call(rax);
 
+#ifndef _WIN32
+        a.pop(rsi);  // Restore old RSP holder
+#endif
+
         // Load result
         a.vmovupd(ymm(dstReg), ymmword_ptr(rsp, kResultOffset));
 
-        // Cleanup stack space
-        a.add(rsp, kTotalStack);
+        // Restore original RSP (which we saved in RDI on Windows, RSI on Linux)
+#ifdef _WIN32
+        a.mov(rsp, rdi);
+#else
+        a.mov(rsp, rsi);
+#endif
 
         // Restore RDI/RSI workspace pointers
         a.pop(rsi);
