@@ -1,4 +1,18 @@
-name: CI C API
+##############################################################################
+#
+#  Build & Test Forge C API
+#
+#  Builds and tests the C API shared library on supported platforms.
+#  Artifacts are stored for 90 days.
+#
+#  macOS is disabled - ARM/NEON instruction sets not yet implemented.
+#
+#  Copyright (c) 2025 The Forge Authors
+#  SPDX-License-Identifier: Zlib
+#
+##############################################################################
+
+name: Build & Test C API
 
 on:
   push:
@@ -16,7 +30,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  build_windows:
+  windows:
     name: Windows
     runs-on: windows-2022
     strategy:
@@ -51,16 +65,19 @@ jobs:
           cd build
           ctest --output-on-failure --timeout 120
 
+      - name: Install
+        if: matrix.config == 'Release'
+        run: cmake --install build --prefix dist
+
       - name: Upload artifacts
+        if: matrix.config == 'Release'
         uses: actions/upload-artifact@v4
         with:
-          name: forge-capi-windows-${{ matrix.config }}
-          path: |
-            build/forge_capi.dll
-            build/forge_capi.lib
-            api/c/forge_c_api.h
+          name: forge-capi-windows-x64
+          path: dist/
+          retention-days: 90
 
-  build_linux:
+  linux:
     name: Linux
     runs-on: ubuntu-latest
     strategy:
@@ -92,21 +109,17 @@ jobs:
           cd build
           ctest --output-on-failure --timeout 120
 
+      - name: Install
+        if: matrix.config == 'Release'
+        run: cmake --install build --prefix dist
+
       - name: Upload artifacts
+        if: matrix.config == 'Release'
         uses: actions/upload-artifact@v4
         with:
-          name: forge-capi-linux-${{ matrix.config }}
-          path: |
-            build/libforge_capi.so*
-            api/c/forge_c_api.h
+          name: forge-capi-linux-x64
+          path: dist/
+          retention-days: 90
 
-  # macOS builds disabled - ARM support not yet implemented
-  # TODO: Re-enable when ARM/NEON instruction sets are added
-  # build_macos:
-  #   name: macOS
-  #   runs-on: macos-latest
-  #   ...
-  # build_macos_arm:
-  #   name: macOS ARM
-  #   runs-on: macos-14
-  #   ...
+  # macOS builds disabled - ARM/NEON instruction sets not yet implemented
+  # TODO: Re-enable when ARM/NEON support is added
