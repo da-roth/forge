@@ -63,7 +63,7 @@ jobs:
       - name: Test
         run: |
           cd build
-          ctest --output-on-failure --timeout 120
+          ctest -V --output-on-failure --timeout 120
 
       - name: Install
         if: matrix.config == 'Release'
@@ -107,7 +107,7 @@ jobs:
       - name: Test
         run: |
           cd build
-          ctest --output-on-failure --timeout 120
+          ctest -V --output-on-failure --timeout 120
 
       - name: Install
         if: matrix.config == 'Release'
