@@ -303,6 +303,7 @@ FORGE_API ForgeError forge_graph_propagate_gradients(ForgeGraphHandle graph) {
     }
 
     // Forward propagation: if any operand needs gradient, result needs gradient
+    // This matches the C++ ForgeBackend implementation exactly
     for (size_t i = 0; i < nodes.size(); ++i) {
         auto& node = nodes[i];
         if (node.isDead) continue;
@@ -315,7 +316,9 @@ FORGE_API ForgeError forge_graph_propagate_gradients(ForgeGraphHandle graph) {
         if (node.c < nodes.size())
             operandNeedsGrad |= nodes[node.c].needsGradient;
 
-        if (operandNeedsGrad)
+        // Only set needsGradient if the node is active
+        // (constants are inactive and should not have needsGradient=true)
+        if (operandNeedsGrad && node.isActive)
             node.needsGradient = true;
     }
 
