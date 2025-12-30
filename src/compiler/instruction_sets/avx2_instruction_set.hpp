@@ -304,42 +304,46 @@ private:
         a.push(rdi);
         a.push(rsi);
 
-        // Allocate space for 2 YMM values: input, result
-        // Each YMM = 32 bytes, total = 64 bytes
-        // Add 8 bytes for stack alignment (16-byte boundary after pushes)
-        a.sub(rsp, 64 + 8);
-
-        // Store input to [rsp+8]
-        a.vmovupd(ymmword_ptr(rsp, 8), ymm(srcReg));
-
-        // Set up function arguments according to platform ABI
+        // Allocate space for 2 YMM values (input + result = 64 bytes) plus alignment.
+        // On Windows, include shadow space (32 bytes) in a single allocation.
+        //
+        // Stack layout after allocation:
+        // Windows: [rsp+0..31]=shadow, [rsp+40..71]=input, [rsp+72..103]=result (total: 104)
+        // Linux:   [rsp+8..39]=input, [rsp+40..71]=result (total: 72)
 #ifdef _WIN32
-        // Windows x64 ABI: RCX = arg1, RDX = arg2
-        a.lea(rcx, ptr(rsp, 8));   // input pointer
-        a.lea(rdx, ptr(rsp, 40));  // result pointer
-
-        // Allocate shadow space (32 bytes required by Windows x64 ABI)
-        a.sub(rsp, 32);
+        constexpr int kInputOffset = 40;   // shadow(32) + alignment(8)
+        constexpr int kResultOffset = 72;  // shadow(32) + alignment(8) + input(32)
+        constexpr int kTotalStack = 104;   // shadow(32) + alignment(8) + input(32) + result(32)
 #else
-        // Linux System V ABI: RDI = arg1, RSI = arg2
-        a.lea(rdi, ptr(rsp, 8));
-        a.lea(rsi, ptr(rsp, 40));
+        constexpr int kInputOffset = 8;
+        constexpr int kResultOffset = 40;
+        constexpr int kTotalStack = 72;    // alignment(8) + input(32) + result(32)
+#endif
+
+        // Single stack allocation - all space including shadow space on Windows
+        a.sub(rsp, kTotalStack);
+
+        // Store input
+        a.vmovupd(ymmword_ptr(rsp, kInputOffset), ymm(srcReg));
+
+        // Set up function arguments - pointers are correct relative to final RSP
+#ifdef _WIN32
+        a.lea(rcx, ptr(rsp, kInputOffset));
+        a.lea(rdx, ptr(rsp, kResultOffset));
+#else
+        a.lea(rdi, ptr(rsp, kInputOffset));
+        a.lea(rsi, ptr(rsp, kResultOffset));
 #endif
 
         // Call the vectorized function (ONE call for all 4 doubles!)
         a.mov(rax, funcAddr);
         a.call(rax);
 
-#ifdef _WIN32
-        // Remove shadow space
-        a.add(rsp, 32);
-#endif
+        // Load result
+        a.vmovupd(ymm(dstReg), ymmword_ptr(rsp, kResultOffset));
 
-        // Load result from [rsp+40]
-        a.vmovupd(ymm(dstReg), ymmword_ptr(rsp, 40));
-
-        // Cleanup stack space (64 + 8 bytes)
-        a.add(rsp, 64 + 8);
+        // Cleanup stack space
+        a.add(rsp, kTotalStack);
 
         // Restore RDI/RSI workspace pointers
         a.pop(rsi);
@@ -366,47 +370,51 @@ private:
         a.push(rdi);
         a.push(rsi);
 
-        // Allocate space for 3 YMM values: arg1 (base), arg2 (exp), result
-        // Each YMM = 32 bytes, total = 96 bytes
-        // Add 8 bytes for stack alignment (16-byte boundary after pushes)
-        a.sub(rsp, 96 + 8);
-
-        // Store arg1 (base) to [rsp+8]
-        a.vmovupd(ymmword_ptr(rsp, 8), ymm(arg1Reg));
-
-        // Store arg2 (exp) to [rsp+40]
-        a.vmovupd(ymmword_ptr(rsp, 40), ymm(arg2Reg));
-
-        // Set up function arguments according to platform ABI
+        // Allocate space for 3 YMM values (arg1 + arg2 + result = 96 bytes) plus alignment.
+        // On Windows, include shadow space (32 bytes) in a single allocation.
+        //
+        // Stack layout after allocation:
+        // Windows: [rsp+0..31]=shadow, [rsp+40..71]=arg1, [rsp+72..103]=arg2, [rsp+104..135]=result (total: 136)
+        // Linux:   [rsp+8..39]=arg1, [rsp+40..71]=arg2, [rsp+72..103]=result (total: 104)
 #ifdef _WIN32
-        // Windows x64 ABI: RCX = arg1, RDX = arg2, R8 = arg3
-        a.lea(rcx, ptr(rsp, 8));   // base pointer
-        a.lea(rdx, ptr(rsp, 40));  // exp pointer
-        a.lea(r8, ptr(rsp, 72));   // result pointer
-
-        // Allocate shadow space (32 bytes required by Windows x64 ABI)
-        a.sub(rsp, 32);
+        constexpr int kArg1Offset = 40;    // shadow(32) + alignment(8)
+        constexpr int kArg2Offset = 72;    // shadow(32) + alignment(8) + arg1(32)
+        constexpr int kResultOffset = 104; // shadow(32) + alignment(8) + arg1(32) + arg2(32)
+        constexpr int kTotalStack = 136;   // shadow(32) + alignment(8) + arg1(32) + arg2(32) + result(32)
 #else
-        // Linux System V ABI: RDI = arg1, RSI = arg2, RDX = arg3
-        a.lea(rdi, ptr(rsp, 8));
-        a.lea(rsi, ptr(rsp, 40));
-        a.lea(rdx, ptr(rsp, 72));
+        constexpr int kArg1Offset = 8;
+        constexpr int kArg2Offset = 40;
+        constexpr int kResultOffset = 72;
+        constexpr int kTotalStack = 104;   // alignment(8) + arg1(32) + arg2(32) + result(32)
+#endif
+
+        // Single stack allocation - all space including shadow space on Windows
+        a.sub(rsp, kTotalStack);
+
+        // Store arguments
+        a.vmovupd(ymmword_ptr(rsp, kArg1Offset), ymm(arg1Reg));
+        a.vmovupd(ymmword_ptr(rsp, kArg2Offset), ymm(arg2Reg));
+
+        // Set up function arguments - pointers are correct relative to final RSP
+#ifdef _WIN32
+        a.lea(rcx, ptr(rsp, kArg1Offset));
+        a.lea(rdx, ptr(rsp, kArg2Offset));
+        a.lea(r8, ptr(rsp, kResultOffset));
+#else
+        a.lea(rdi, ptr(rsp, kArg1Offset));
+        a.lea(rsi, ptr(rsp, kArg2Offset));
+        a.lea(rdx, ptr(rsp, kResultOffset));
 #endif
 
         // Call the vectorized function (ONE call for all 4 doubles!)
         a.mov(rax, funcAddr);
         a.call(rax);
 
-#ifdef _WIN32
-        // Remove shadow space
-        a.add(rsp, 32);
-#endif
+        // Load result
+        a.vmovupd(ymm(dstReg), ymmword_ptr(rsp, kResultOffset));
 
-        // Load result from [rsp+72]
-        a.vmovupd(ymm(dstReg), ymmword_ptr(rsp, 72));
-
-        // Cleanup stack space (96 + 8 bytes)
-        a.add(rsp, 96 + 8);
+        // Cleanup stack space
+        a.add(rsp, kTotalStack);
 
         // Restore RDI/RSI workspace pointers
         a.pop(rsi);
