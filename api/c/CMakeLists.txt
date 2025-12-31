@@ -24,6 +24,7 @@ project(ForgeCAPI VERSION 0.1.0 LANGUAGES CXX C)
 
 # Options
 option(FORGE_CAPI_BUILD_TESTS "Build C API tests" ON)
+option(FORGE_CAPI_USE_STATIC_RUNTIME "Use static runtime library (/MT) instead of dynamic (/MD) on MSVC" OFF)
 
 # C++ standard
 set(CMAKE_CXX_STANDARD 17)
@@ -33,9 +34,17 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # Position independent code for shared library
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-# On Windows, use static runtime to avoid CRT version dependencies
+# On Windows, configure runtime library (static or dynamic)
 if(MSVC)
-    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    if(FORGE_CAPI_USE_STATIC_RUNTIME)
+        set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+        message(STATUS "Forge C API: Using static MSVC runtime (/MT, /MTd)")
+    else()
+        set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+        message(STATUS "Forge C API: Using dynamic MSVC runtime (/MD, /MDd)")
+    endif()
+    # Pass the runtime setting to Forge core (included as subdirectory)
+    set(FORGE_USE_STATIC_RUNTIME ${FORGE_CAPI_USE_STATIC_RUNTIME} CACHE BOOL "" FORCE)
 endif()
 
 # Symbol visibility
