@@ -2,7 +2,7 @@
 #include "../src/compiler/runtime_trace.hpp"
 #include "../src/compiler/instruction_set_factory.hpp"
 #include "../src/compiler/compiler_config.hpp"
-#include <asmjit/asmjit.h>
+#include <asmjit/x86.h>
 #include <iostream>
 
 using namespace forge;

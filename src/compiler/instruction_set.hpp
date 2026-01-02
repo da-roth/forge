@@ -170,7 +170,7 @@ public:
     virtual void emitSaveCalleeRegisters(asmjit::x86::Assembler& a) = 0;
     virtual void emitRestoreCalleeRegisters(asmjit::x86::Assembler& a) = 0;
     virtual int getStackSpaceNeeded() const = 0;
-    virtual asmjit::x86::Xmm getRegister(int index) const = 0;
+    virtual asmjit::x86::Vec getRegister(int index) const = 0;
     virtual void emitMoveArgsToRegisters(asmjit::x86::Assembler& a) = 0;
     ///@}
 

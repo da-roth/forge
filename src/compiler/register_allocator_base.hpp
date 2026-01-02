@@ -84,14 +84,14 @@ public:
  * - All operations are O(1) or O(n) with small n, suitable for compilation
  * - Thread safety must be ensured at higher level (ForgeEngine)
  *
- * @tparam RegType AsmJit register type (Xmm, Ymm, Zmm, etc.)
+ * @tparam RegType AsmJit register type (Vec for XMM/YMM/ZMM)
  * @tparam NUM_REGS Total number of registers of this type available (typically 16)
  *
  * Example:
  * @code
- * class MyAllocator : public RegisterAllocatorBase<asmjit::x86::Xmm, 16> {
- *     asmjit::x86::Xmm getRegister(int index) const override {
- *         return asmjit::x86::xmm0 + index;
+ * class MyAllocator : public RegisterAllocatorBase<asmjit::x86::Vec, 16> {
+ *     asmjit::x86::Vec getRegister(int index) const override {
+ *         return asmjit::x86::xmm(index);  // or ymm(index), zmm(index)
  *     }
  * };
  * @endcode
