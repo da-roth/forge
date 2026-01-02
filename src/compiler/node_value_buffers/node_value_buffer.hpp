@@ -4,7 +4,15 @@
 #include <cstring>
 #include <vector>
 #include <memory>
+#include <unordered_set>
+#include <stdexcept>
 #include "../../graph/graph.hpp"
+
+#ifdef _WIN32
+#include <malloc.h>  // For _aligned_malloc and _aligned_free on Windows
+#else
+#include <cstdlib>   // For aligned_alloc and free on Linux
+#endif
 
 namespace forge {
 
@@ -55,52 +63,26 @@ public:
     /**
      * Get gradients for multiple nodes, all lanes at once (interleaved layout).
      * This is the most efficient way to retrieve gradients in hot loops.
-     * Default implementation loops over indices; subclasses may override for optimization (e.g., AVX2).
      * @param bufferIndices Pre-computed buffer indices (from getBufferIndex)
      * @param output Pointer with space for bufferIndices.size() * getVectorWidth() doubles.
-     *               Layout: [node0_lane0, node0_lane1, ..., node1_lane0, node1_lane1, ...]
-     *               For scalar (width=1): simply [grad0, grad1, grad2, ...]
-     *               For AVX2 (width=4): [n0_L0, n0_L1, n0_L2, n0_L3, n1_L0, n1_L1, ...]
      */
-    virtual void getGradientLanes(const std::vector<size_t>& bufferIndices, double* output) const {
-        const double* grads = const_cast<INodeValueBuffer*>(this)->getGradientsPtr();
-        if (!grads) return;
-        const int width = getVectorWidth();
-        for (size_t i = 0; i < bufferIndices.size(); ++i) {
-            std::memcpy(&output[i * width], &grads[bufferIndices[i]], width * sizeof(double));
-        }
-    }
+    virtual void getGradientLanes(const std::vector<size_t>& bufferIndices, double* output) const = 0;
 
     /**
      * Set values for multiple nodes at once using pre-computed buffer indices.
      * Batched equivalent of setLanes() - much faster due to single virtual call.
-     * Default implementation loops over indices; subclasses may override for optimization.
      * @param bufferIndices Pre-computed buffer indices (from getBufferIndex)
      * @param values Pointer to bufferIndices.size() * getVectorWidth() doubles
-     *               Layout matches getGradientLanes: contiguous per-node, all lanes together
      */
-    virtual void setValueLanes(const std::vector<size_t>& bufferIndices, const double* values) {
-        const int width = getVectorWidth();
-        double* ptr = getValuesPtr();
-        for (size_t i = 0; i < bufferIndices.size(); ++i) {
-            std::memcpy(&ptr[bufferIndices[i]], &values[i * width], width * sizeof(double));
-        }
-    }
+    virtual void setValueLanes(const std::vector<size_t>& bufferIndices, const double* values) = 0;
 
     /**
      * Get values for multiple nodes at once using pre-computed buffer indices.
      * Batched equivalent of getLanes() - much faster due to single virtual call.
-     * Default implementation loops over indices; subclasses may override for optimization.
      * @param bufferIndices Pre-computed buffer indices (from getBufferIndex)
      * @param output Pointer with space for bufferIndices.size() * getVectorWidth() doubles
      */
-    virtual void getValueLanes(const std::vector<size_t>& bufferIndices, double* output) const {
-        const int width = getVectorWidth();
-        const double* ptr = const_cast<INodeValueBuffer*>(this)->getValuesPtr();
-        for (size_t i = 0; i < bufferIndices.size(); ++i) {
-            std::memcpy(&output[i * width], &ptr[bufferIndices[i]], width * sizeof(double));
-        }
-    }
+    virtual void getValueLanes(const std::vector<size_t>& bufferIndices, double* output) const = 0;
 
     // ==========================================================================
     // DEPRECATED API: Convenience wrappers (internally use Lanes)
@@ -155,6 +137,254 @@ public:
 
     /** Get raw pointer to gradients buffer (for direct AVX2 intrinsic access) */
     virtual double* getGradientsPtr() = 0;
+};
+
+/**
+ * Template base class for NodeValueBuffer implementations.
+ * Provides common functionality with vector width as template parameter.
+ *
+ * @tparam VectorWidth Number of doubles per node (1 for scalar, 4 for AVX2)
+ * @tparam Alignment Memory alignment in bytes (64 for scalar, 32 for AVX2)
+ */
+template<int VectorWidth, size_t Alignment>
+class NodeValueBufferBase : public INodeValueBuffer {
+public:
+    static constexpr int VECTOR_WIDTH = VectorWidth;
+    static constexpr size_t ALIGNMENT = Alignment;
+
+    NodeValueBufferBase(const forge::Graph& tape,
+                        const std::vector<forge::NodeId>& originalToOptimizedMapping,
+                        size_t requiredNodes)
+        : originalToOptimizedMapping_(originalToOptimizedMapping), num_nodes_(requiredNodes) {
+
+        diff_inputs_ = tape.diff_inputs;
+        // Build hash set for O(1) lookup in getGradient()
+        diff_inputs_set_.insert(diff_inputs_.begin(), diff_inputs_.end());
+
+        // Allocate values - VectorWidth doubles per node
+        size_t totalDoubles = num_nodes_ * VectorWidth;
+
+        // Safety check: ensure we allocate at least some memory
+        if (totalDoubles == 0) {
+            totalDoubles = VectorWidth;
+        }
+
+        // Calculate allocation size - must be multiple of alignment for aligned_alloc on Linux
+        size_t allocSize = totalDoubles * sizeof(double);
+        size_t alignedAllocSize = (allocSize + (Alignment - 1)) & ~(Alignment - 1);
+
+        // Platform-specific aligned allocation
+#ifdef _WIN32
+        values_ = static_cast<double*>(_aligned_malloc(allocSize, Alignment));
+#else
+        values_ = static_cast<double*>(aligned_alloc(Alignment, alignedAllocSize));
+#endif
+        if (!values_) {
+            throw std::bad_alloc();
+        }
+        std::memset(values_, 0, allocSize);
+
+        // Allocate gradients if needed
+        if (!tape.diff_inputs.empty()) {
+#ifdef _WIN32
+            gradients_ = static_cast<double*>(_aligned_malloc(allocSize, Alignment));
+#else
+            gradients_ = static_cast<double*>(aligned_alloc(Alignment, alignedAllocSize));
+#endif
+            if (!gradients_) {
+#ifdef _WIN32
+                _aligned_free(values_);
+#else
+                free(values_);
+#endif
+                throw std::bad_alloc();
+            }
+            std::memset(gradients_, 0, allocSize);
+        }
+    }
+
+    ~NodeValueBufferBase() override {
+        if (values_) {
+#ifdef _WIN32
+            _aligned_free(values_);
+#else
+            free(values_);
+#endif
+        }
+        if (gradients_) {
+#ifdef _WIN32
+            _aligned_free(gradients_);
+#else
+            free(gradients_);
+#endif
+        }
+    }
+
+    // ==========================================================================
+    // PRIMARY API: Lanes (raw pointer, no allocation)
+    // ==========================================================================
+
+    void setLanes(uint64_t nodeId, const double* values) override {
+        if (nodeId < originalToOptimizedMapping_.size()) {
+            uint64_t optimizedNodeId = originalToOptimizedMapping_[nodeId];
+            if (optimizedNodeId != static_cast<uint64_t>(-1) && optimizedNodeId < num_nodes_) {
+                size_t baseIdx = optimizedNodeId * VectorWidth;
+                if constexpr (VectorWidth == 1) {
+                    values_[baseIdx] = values[0];
+                } else {
+                    std::memcpy(&values_[baseIdx], values, VectorWidth * sizeof(double));
+                }
+            }
+        }
+    }
+
+    void getLanes(uint64_t nodeId, double* output) const override {
+        if (nodeId < originalToOptimizedMapping_.size()) {
+            uint64_t optimizedNodeId = originalToOptimizedMapping_[nodeId];
+            if (optimizedNodeId != static_cast<uint64_t>(-1) && optimizedNodeId < num_nodes_) {
+                size_t baseIdx = optimizedNodeId * VectorWidth;
+                if constexpr (VectorWidth == 1) {
+                    output[0] = values_[baseIdx];
+                } else {
+                    std::memcpy(output, &values_[baseIdx], VectorWidth * sizeof(double));
+                }
+            }
+        }
+    }
+
+    void getGradientLanes(const std::vector<size_t>& bufferIndices, double* output) const override {
+        if (!gradients_) return;
+        for (size_t i = 0; i < bufferIndices.size(); ++i) {
+            if constexpr (VectorWidth == 1) {
+                output[i] = gradients_[bufferIndices[i]];
+            } else {
+                std::memcpy(&output[i * VectorWidth], &gradients_[bufferIndices[i]], VectorWidth * sizeof(double));
+            }
+        }
+    }
+
+    void setValueLanes(const std::vector<size_t>& bufferIndices, const double* values) override {
+        for (size_t i = 0; i < bufferIndices.size(); ++i) {
+            if constexpr (VectorWidth == 1) {
+                values_[bufferIndices[i]] = values[i];
+            } else {
+                std::memcpy(&values_[bufferIndices[i]], &values[i * VectorWidth], VectorWidth * sizeof(double));
+            }
+        }
+    }
+
+    void getValueLanes(const std::vector<size_t>& bufferIndices, double* output) const override {
+        for (size_t i = 0; i < bufferIndices.size(); ++i) {
+            if constexpr (VectorWidth == 1) {
+                output[i] = values_[bufferIndices[i]];
+            } else {
+                std::memcpy(&output[i * VectorWidth], &values_[bufferIndices[i]], VectorWidth * sizeof(double));
+            }
+        }
+    }
+
+    // ==========================================================================
+    // DEPRECATED API: Convenience wrappers (internally use Lanes)
+    // ==========================================================================
+
+    void setValue(uint64_t nodeId, double value) override {
+        if constexpr (VectorWidth == 1) {
+            double data[1] = {value};
+            setLanes(nodeId, data);
+        } else {
+            double data[VectorWidth];
+            for (int i = 0; i < VectorWidth; ++i) data[i] = value;
+            setLanes(nodeId, data);
+        }
+    }
+
+    double getValue(uint64_t nodeId) const override {
+        double data[VectorWidth];
+        getLanes(nodeId, data);
+        return data[0];
+    }
+
+    size_t getBufferIndex(uint64_t nodeId) const override {
+        if (nodeId < originalToOptimizedMapping_.size()) {
+            uint64_t optimizedNodeId = originalToOptimizedMapping_[nodeId];
+            if (optimizedNodeId != static_cast<uint64_t>(-1) && optimizedNodeId < num_nodes_) {
+                return optimizedNodeId * VectorWidth;
+            }
+        }
+        return SIZE_MAX;
+    }
+
+    // ==========================================================================
+    // Gradient access
+    // ==========================================================================
+
+    double getGradient(forge::NodeId node) const override {
+        if (!gradients_) {
+            throw std::runtime_error("No gradients computed - no inputs marked with markInputAndDiff()");
+        }
+
+        // Map original node ID to optimized if mapping is available
+        forge::NodeId mappedNode = node;
+        if (node < originalToOptimizedMapping_.size()) {
+            auto candidate = originalToOptimizedMapping_[node];
+            if (candidate != static_cast<forge::NodeId>(UINT32_MAX)) {
+                mappedNode = candidate;
+            }
+        }
+
+        // O(1) lookup using hash set instead of O(n) linear search
+        if (diff_inputs_set_.find(mappedNode) == diff_inputs_set_.end()) {
+            throw std::runtime_error("Node was not marked for differentiation");
+        }
+
+        // Use getGradientLanes internally
+        size_t bufferIdx = mappedNode * VectorWidth;
+        std::vector<size_t> indices = {bufferIdx};
+        double grad[VectorWidth];
+        getGradientLanes(indices, grad);
+        return grad[0];
+    }
+
+    void clearGradients() override {
+        if (gradients_) {
+            std::memset(gradients_, 0, num_nodes_ * VectorWidth * sizeof(double));
+        }
+    }
+
+    bool hasGradients() const override {
+        return gradients_ != nullptr;
+    }
+
+    // Buffer info
+    int getVectorWidth() const override { return VectorWidth; }
+    uint64_t getNumNodes() const override { return num_nodes_; }
+
+    // Raw access
+    double* getValuesPtr() override { return values_; }
+    double* getGradientsPtr() override { return gradients_; }
+
+    // Disable copy
+    NodeValueBufferBase(const NodeValueBufferBase&) = delete;
+    NodeValueBufferBase& operator=(const NodeValueBufferBase&) = delete;
+
+    // Enable move
+    NodeValueBufferBase(NodeValueBufferBase&& other) noexcept
+        : values_(other.values_), gradients_(other.gradients_),
+          num_nodes_(other.num_nodes_), diff_inputs_(std::move(other.diff_inputs_)),
+          diff_inputs_set_(std::move(other.diff_inputs_set_)),
+          originalToOptimizedMapping_(std::move(other.originalToOptimizedMapping_)) {
+        other.values_ = nullptr;
+        other.gradients_ = nullptr;
+        other.num_nodes_ = 0;
+    }
+
+protected:
+    double* values_ = nullptr;
+    double* gradients_ = nullptr;
+    uint64_t num_nodes_;
+    std::vector<forge::NodeId> diff_inputs_;
+    std::unordered_set<forge::NodeId> diff_inputs_set_;
+    std::vector<forge::NodeId> originalToOptimizedMapping_;
 };
 
 /**
