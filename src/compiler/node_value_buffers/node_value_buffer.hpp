@@ -1,7 +1,6 @@
 #pragma once
 
 #include <cstdint>
-#include <cstring>
 #include <vector>
 #include <memory>
 #include "../../graph/graph.hpp"
@@ -55,52 +54,13 @@ public:
     /**
      * Get gradients for multiple nodes, all lanes at once (interleaved layout).
      * This is the most efficient way to retrieve gradients in hot loops.
-     * Default implementation loops over indices; subclasses may override for optimization (e.g., AVX2).
      * @param bufferIndices Pre-computed buffer indices (from getBufferIndex)
      * @param output Pointer with space for bufferIndices.size() * getVectorWidth() doubles.
      *               Layout: [node0_lane0, node0_lane1, ..., node1_lane0, node1_lane1, ...]
      *               For scalar (width=1): simply [grad0, grad1, grad2, ...]
      *               For AVX2 (width=4): [n0_L0, n0_L1, n0_L2, n0_L3, n1_L0, n1_L1, ...]
      */
-    virtual void getGradientLanes(const std::vector<size_t>& bufferIndices, double* output) const {
-        const double* grads = const_cast<INodeValueBuffer*>(this)->getGradientsPtr();
-        if (!grads) return;
-        const int width = getVectorWidth();
-        for (size_t i = 0; i < bufferIndices.size(); ++i) {
-            std::memcpy(&output[i * width], &grads[bufferIndices[i]], width * sizeof(double));
-        }
-    }
-
-    /**
-     * Set values for multiple nodes at once using pre-computed buffer indices.
-     * Batched equivalent of setLanes() - much faster due to single virtual call.
-     * Default implementation loops over indices; subclasses may override for optimization.
-     * @param bufferIndices Pre-computed buffer indices (from getBufferIndex)
-     * @param values Pointer to bufferIndices.size() * getVectorWidth() doubles
-     *               Layout matches getGradientLanes: contiguous per-node, all lanes together
-     */
-    virtual void setValueLanes(const std::vector<size_t>& bufferIndices, const double* values) {
-        const int width = getVectorWidth();
-        double* ptr = getValuesPtr();
-        for (size_t i = 0; i < bufferIndices.size(); ++i) {
-            std::memcpy(&ptr[bufferIndices[i]], &values[i * width], width * sizeof(double));
-        }
-    }
-
-    /**
-     * Get values for multiple nodes at once using pre-computed buffer indices.
-     * Batched equivalent of getLanes() - much faster due to single virtual call.
-     * Default implementation loops over indices; subclasses may override for optimization.
-     * @param bufferIndices Pre-computed buffer indices (from getBufferIndex)
-     * @param output Pointer with space for bufferIndices.size() * getVectorWidth() doubles
-     */
-    virtual void getValueLanes(const std::vector<size_t>& bufferIndices, double* output) const {
-        const int width = getVectorWidth();
-        const double* ptr = const_cast<INodeValueBuffer*>(this)->getValuesPtr();
-        for (size_t i = 0; i < bufferIndices.size(); ++i) {
-            std::memcpy(&output[i * width], &ptr[bufferIndices[i]], width * sizeof(double));
-        }
-    }
+    virtual void getGradientLanes(const std::vector<size_t>& bufferIndices, double* output) const = 0;
 
     // ==========================================================================
     // DEPRECATED API: Convenience wrappers (internally use Lanes)

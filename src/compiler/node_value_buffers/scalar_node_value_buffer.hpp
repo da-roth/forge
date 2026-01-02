@@ -104,7 +104,13 @@ public:
         }
     }
 
-    // getGradientLanes, setValueLanes, and getValueLanes use default implementation from INodeValueBuffer
+    // For scalar, output is simply contiguous gradients (vector width = 1)
+    void getGradientLanes(const std::vector<size_t>& bufferIndices, double* output) const override {
+        if (!gradients_) return;
+        for (size_t i = 0; i < bufferIndices.size(); ++i) {
+            output[i] = gradients_[bufferIndices[i]];
+        }
+    }
 
     // ==========================================================================
     // DEPRECATED API: Convenience wrappers (internally use Lanes)
