@@ -684,14 +684,13 @@ private:
     void emitRestoreCalleeRegisters(asmjit::x86::Assembler& a) override;
     int getStackSpaceNeeded() const override;
     
-    // Get XMM register from index (for compatibility)
-    asmjit::x86::Xmm getRegister(int index) const override {
-        return asmjit::x86::xmm(index);
+    // Get vector register from index - returns YMM for AVX2
+    asmjit::x86::Vec getRegister(int index) const override {
+        return asmjit::x86::ymm(index);
     }
-    
-    // Get YMM register from index (for AVX2)
+
+    // Alias for clarity when specifically working with YMM registers
     asmjit::x86::Vec getYmmRegister(int index) const {
-        // Use Vec<256> for YMM registers (256-bit)
         return asmjit::x86::ymm(index);
     }
     

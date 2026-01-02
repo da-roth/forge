@@ -86,7 +86,7 @@ public:
     // Unary operations
     void emitNeg(asmjit::x86::Assembler& a, int dstReg, int tempReg) override {
         // Negate by subtracting from zero: result = 0 - value
-        asmjit::x86::Xmm tmpReg = getRegister(tempReg);
+        asmjit::x86::Vec tmpReg = getRegister(tempReg);
         a.xorpd(tmpReg, tmpReg); // Zero out temp register
         a.subsd(tmpReg, getRegister(dstReg));
         a.movsd(getRegister(dstReg), tmpReg);
@@ -97,8 +97,8 @@ public:
 
     void emitAbs(asmjit::x86::Assembler& a, int dstReg, int tempReg) override {
         // Clear the sign bit using AND with 0x7FFFFFFFFFFFFFFF
-        asmjit::x86::Xmm reg = getRegister(dstReg);
-        asmjit::x86::Xmm tmpReg = getRegister(tempReg);
+        asmjit::x86::Vec reg = getRegister(dstReg);
+        asmjit::x86::Vec tmpReg = getRegister(tempReg);
 
         // Create mask with all bits set except sign bit
         a.pcmpeqd(tmpReg, tmpReg); // All ones
@@ -213,7 +213,7 @@ public:
     // Special optimized operations
     void emitSquare(asmjit::x86::Assembler& a, int dstReg) override {
         // x * x is often faster than pow(x, 2)
-        asmjit::x86::Xmm reg = getRegister(dstReg);
+        asmjit::x86::Vec reg = getRegister(dstReg);
         a.mulsd(reg, reg);
     }
     
@@ -375,7 +375,7 @@ public:
     
     // Create all-ones mask
     void emitCreateAllOnes(asmjit::x86::Assembler& a, int dstReg) override {
-        asmjit::x86::Xmm reg = getRegister(dstReg);
+        asmjit::x86::Vec reg = getRegister(dstReg);
         a.pcmpeqw(reg, reg);  // All 1s
     }
     
@@ -535,7 +535,7 @@ public:
     
     // Zero out a register
     void emitZero(asmjit::x86::Assembler& a, int dstReg) override {
-        asmjit::x86::Xmm reg = getRegister(dstReg);
+        asmjit::x86::Vec reg = getRegister(dstReg);
         a.xorpd(reg, reg);
         // Trace the zeroed register
         tracer.emitTraceXMM(a, reg, OperationType::ZERO, 1, -1, -1, dstReg);
@@ -608,7 +608,7 @@ public:
     void emitAccumulateGradient(asmjit::x86::Assembler& a, int srcReg, forge::NodeId nodeId, int tempReg) override {
         // RSI points to gradients array
         size_t offset = nodeId * sizeof(double);
-        asmjit::x86::Xmm temp = getRegister(tempReg);
+        asmjit::x86::Vec temp = getRegister(tempReg);
         
         if (offset < 128) {
             a.movsd(temp, asmjit::x86::ptr(asmjit::x86::rsi, static_cast<int32_t>(offset)));
@@ -717,16 +717,9 @@ public:
     }
     
     // Get XMM register from index
-    asmjit::x86::Xmm getRegister(int index) const override {
-        static const asmjit::x86::Xmm registers[] = {
-            asmjit::x86::xmm0,  asmjit::x86::xmm1,  asmjit::x86::xmm2,  asmjit::x86::xmm3,
-            asmjit::x86::xmm4,  asmjit::x86::xmm5,  asmjit::x86::xmm6,  asmjit::x86::xmm7,
-            asmjit::x86::xmm8,  asmjit::x86::xmm9,  asmjit::x86::xmm10, asmjit::x86::xmm11,
-            asmjit::x86::xmm12, asmjit::x86::xmm13, asmjit::x86::xmm14, asmjit::x86::xmm15
-        };
-        
+    asmjit::x86::Vec getRegister(int index) const override {
         if (index >= 0 && index < 16) {
-            return registers[index];
+            return asmjit::x86::xmm(index);
         }
         return asmjit::x86::xmm0; // Fallback
     }

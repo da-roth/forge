@@ -19,7 +19,7 @@
 
 #include "runtime_trace.hpp"
 #include "compiler_config.hpp"
-#include <asmjit/asmjit.h>
+#include <asmjit/x86.h>
 #include <cstdint>
 #include <iostream>
 #include <cmath>
@@ -52,7 +52,7 @@ namespace forge {
  * InstructionTracer tracer(config);
  *
  * // In JIT code generation:
- * tracer.emitTraceXMM(assembler, xmm0, OperationType::Add, 1, nodeId);
+ * tracer.emitTrace(assembler, asmjit::x86::xmm0, OperationType::Add, 1, nodeId);
  * @endcode
  */
 class InstructionTracer {
@@ -64,7 +64,7 @@ private:
     bool shouldTrace() const {
         return config.printRuntimeTrace;
     }
-    
+
 public:
     /**
      * @brief Construct tracer with compiler configuration
@@ -79,165 +79,35 @@ public:
             initializeTraceBuffer(1024); // Initialize with 1024 records
         }
     }
-    
+
     /**
-     * @brief Emit tracing code for AVX2 (YMM) 256-bit register
+     * @brief Emit tracing code for a vector register (XMM or YMM)
      *
-     * Generates assembly code that safely records the contents of an AVX2
+     * Generates assembly code that safely records the contents of a vector
      * register into the trace buffer, along with operation metadata.
+     * Automatically detects register size (128-bit XMM or 256-bit YMM).
      *
      * @param a AsmJit assembler for code generation
-     * @param liveReg YMM register to trace (not modified)
+     * @param liveReg Vector register to trace (not modified)
      * @param opType Type of operation being traced (for identification)
-     * @param vectorWidth SIMD width (4 for AVX2 doubles, 8 for AVX-512)
+     * @param vectorWidth SIMD width (1 for scalar, 4 for AVX2 doubles, etc.)
      * @param nodeId Optional graph node ID (-1 if not applicable)
      * @param srcReg Optional source register index
      * @param dstReg Optional destination register index
      *
      * Thread Safety: Not thread-safe - call from single compilation thread
      *
-     * Performance: ~60-100 cycles per trace point (small overhead)
+     * Performance: ~40-100 cycles per trace point (debugging overhead)
      */
-    void emitTraceYMM(asmjit::x86::Assembler& a, asmjit::x86::Ymm liveReg, 
-                         OperationType opType, int vectorWidth = 4, int nodeId = -1, int srcReg = -1, int dstReg = -1) {
-            if (!shouldTrace()) {
-                return;
-            }
-
-            // Limit compile-time trace to first 50 operations
-            if (instructionCounter < 50) {
-                // Concise compile-time trace message
-                if (instructionCounter == 0) {
-                    std::cout << "[Compiling] Trace points (first 50): ";
-                }
-                std::cout << getOperationName(static_cast<uint32_t>(opType)) << "(" << dstReg << "," << srcReg << ") ";
-                // Print newline after a few operations to avoid long lines
-                if ((instructionCounter + 1) % 5 == 0) {
-                    std::cout << std::endl << "                        ";
-                }
-            } else if (instructionCounter == 50) {
-                std::cout << "... (trace output limited to 50 operations)" << std::endl;
-            }
-
-            using namespace asmjit::x86;
-            
-            // ULTRA-SAFE PATTERN: Direct memory writes only, no function calls
-            // This completely avoids ABI, stack, and register preservation issues
-            
-            // 1) Duplicate the live register to a temporary register (never modify the original)
-            // CRITICAL: We must save YMM15 first since it might be in use by the compiled code!
-            asmjit::x86::Ymm tempReg = asmjit::x86::ymm15; // Use YMM15 as temporary
-            
-            // Save YMM15 to stack
-            a.sub(rsp, 32);  // Allocate 32 bytes on stack for YMM
-            a.vmovups(ymmword_ptr(rsp), tempReg);  // Save original YMM15
-            
-            a.vmovaps(tempReg, liveReg);  // Now safe to duplicate liveReg into tempReg
-            
-            // 2) Store directly to the global trace buffer using atomic index
-            // This is the safest approach - no function calls, no ABI issues
-            
-            // Skip runtime check for now - always trace if compile-time flag is set
-            asmjit::Label skipTrace = a.newLabel();
-            // a.jmp(skipTrace); // Uncomment to disable tracing at runtime
-            
-            // Save registers we're about to use
-            a.push(rax);
-            a.push(rcx);
-            a.push(rdx);
-            
-            // Calculate buffer index atomically (simple increment)
-            a.mov(rcx, asmjit::imm((uint64_t)&g_traceBuffer.index));
-            a.mov(edx, asmjit::x86::dword_ptr(rcx));  // Load current index (32-bit)
-            // Note: We use the index BEFORE incrementing for this record
-            a.mov(rax, rdx);                           // Save current index in RAX
-            a.inc(edx);                                // Increment for next record
-            a.mov(asmjit::x86::dword_ptr(rcx), edx);  // Store back (atomic-ish)
-            
-            // Calculate buffer position: (index & mask) * sizeof(TraceRecord)
-            a.mov(rcx, asmjit::imm((uint64_t)&g_traceBuffer.mask));
-            a.mov(ecx, asmjit::x86::dword_ptr(rcx));   // Load mask (32-bit)
-            a.and_(eax, ecx);                           // (saved_index & mask) in EAX
-            a.mov(rdx, rax);                            // Move masked index to RDX for multiplication
-            
-            // edx now contains the buffer index
-            // Calculate offset: edx * sizeof(TraceRecord)
-            // The actual sizeof(TraceRecord) depends on alignment
-            a.imul(rdx, rdx, sizeof(TraceRecord));  // Multiply index by sizeof(TraceRecord) (extend to 64-bit)
-            
-            // Get pointer to the record
-            a.mov(rcx, asmjit::imm((uint64_t)&g_traceBuffer.records));
-            a.mov(rcx, asmjit::x86::qword_ptr(rcx));  // Load records pointer
-            a.add(rcx, rdx);  // rcx now points to the TraceRecord
-            
-            // Store metadata (node ID or instruction counter, operation type, vector width)
-            // For LOAD/STORE ops, store node ID. For others, store instruction counter
-            // Note: x86-64 cannot move immediate to memory directly, must go through register
-            int32_t idToStore = (nodeId >= 0) ? nodeId : static_cast<int32_t>(instructionCounter);
-            a.mov(asmjit::x86::edx, asmjit::imm(idToStore));                                   // Load immediate into EDX
-            a.mov(asmjit::x86::dword_ptr(rcx, 0), asmjit::x86::edx);                          // Store nodeId or instructionId
-            a.mov(asmjit::x86::edx, asmjit::imm(static_cast<uint32_t>(opType)));              // Load immediate into EDX
-            a.mov(asmjit::x86::dword_ptr(rcx, 4), asmjit::x86::edx);                          // Store operationType
-            a.mov(asmjit::x86::edx, asmjit::imm(static_cast<uint32_t>(vectorWidth)));         // Load immediate into EDX
-            a.mov(asmjit::x86::dword_ptr(rcx, 8), asmjit::x86::edx);                          // Store vectorWidth
-            
-            // Store register info in timestamp field (16 bits for dst, 16 bits for src)
-            // Fix: Handle -1 (no register) properly by converting to a valid ID like 0xFFFE
-            uint32_t safeDstReg = (dstReg < 0) ? 0xFFFE : (dstReg & 0xFFFF);
-            uint32_t safeSrcReg = (srcReg < 0) ? 0xFFFE : (srcReg & 0xFFFF);
-            uint32_t regInfo = (safeDstReg << 16) | safeSrcReg;
-            a.mov(asmjit::x86::edx, asmjit::imm(regInfo));                                     // Load immediate into EDX
-            a.mov(asmjit::x86::dword_ptr(rcx, 16), asmjit::x86::edx);                         // Store in lower 32 bits of timestamp
-            
-            instructionCounter++;
-            
-            // Store the register data to the buffer
-            // Data field offset depends on struct layout
-            a.vmovups(ymmword_ptr(rcx, offsetof(TraceRecord, data)), tempReg);
-            
-            // Restore registers we used
-            a.pop(rdx);
-            a.pop(rcx);
-            a.pop(rax);
-            
-            // Restore YMM15 from stack
-            a.vmovups(ymm15, ymmword_ptr(rsp));
-            a.add(rsp, 32);  // Deallocate stack space
-            
-            // Bind the skip label
-            a.bind(skipTrace);
-            
-            // liveReg remains completely unchanged and can be used normally
-        }
-    
-    /**
-     * @brief Emit tracing code for SSE2 (XMM) 128-bit register
-     *
-     * Generates assembly code that safely records the contents of an SSE2
-     * register into the trace buffer, along with operation metadata.
-     * Similar to emitTraceYMM but for 128-bit registers.
-     *
-     * @param a AsmJit assembler for code generation
-     * @param liveReg XMM register to trace (not modified)
-     * @param opType Type of operation being traced
-     * @param vectorWidth SIMD width (1 for scalar, 2 for SSE2 pair)
-     * @param nodeId Optional graph node ID (-1 if not applicable)
-     * @param srcReg Optional source register index
-     * @param dstReg Optional destination register index
-     *
-     * Thread Safety: Not thread-safe - call from single compilation thread
-     *
-     * Performance: ~40-70 cycles per trace point (slightly faster than YMM)
-     */
-    void emitTraceXMM(asmjit::x86::Assembler& a, asmjit::x86::Xmm liveReg, 
-                     OperationType opType, int vectorWidth = 1, int nodeId = -1, int srcReg = -1, int dstReg = -1) {
+    void emitTrace(asmjit::x86::Assembler& a, asmjit::x86::Vec liveReg,
+                   OperationType opType, int vectorWidth = 1, int nodeId = -1, int srcReg = -1, int dstReg = -1) {
         if (!shouldTrace()) {
             return;
         }
 
         // Limit compile-time trace to first 50 operations
         if (instructionCounter < 50) {
-            // Concise compile-time trace message (same as AVX2)
+            // Concise compile-time trace message
             if (instructionCounter == 0) {
                 std::cout << "[Compiling] Trace points (first 50): ";
             }
@@ -252,92 +122,115 @@ public:
 
         using namespace asmjit::x86;
 
+        // Determine if this is a YMM (256-bit) or XMM (128-bit) register
+        const bool isYmm = liveReg.isYmm();
+        const int stackSize = isYmm ? 32 : 16;
+
+        // Use the appropriate temporary register (same size as liveReg)
+        asmjit::x86::Vec tempReg = isYmm ? asmjit::x86::ymm15 : asmjit::x86::xmm15;
+
         // ULTRA-SAFE PATTERN: Direct memory writes only, no function calls
         // This completely avoids ABI, stack, and register preservation issues
 
-        // 1) Duplicate the live register to a temporary register (never modify the original)
-        // CRITICAL: We must save XMM15 first since it might be in use by the compiled code!
-        asmjit::x86::Xmm tempReg = asmjit::x86::xmm15; // Use XMM15 as temporary
-        
-        // Save XMM15 to stack
-        a.sub(rsp, 16);  // Allocate 16 bytes on stack
-        a.movaps(xmmword_ptr(rsp), tempReg);  // Save original XMM15
-        
-        a.movaps(tempReg, liveReg);  // Now safe to duplicate liveReg into tempReg
-        
-        // 2) Store directly to the global trace buffer using atomic index
-        // This is the safest approach - no function calls, no ABI issues
-        
-        // Skip runtime check for now - always trace if compile-time flag is set
+        // 1) Save temp register to stack first since it might be in use
+        a.sub(rsp, stackSize);
+        if (isYmm) {
+            a.vmovups(ymmword_ptr(rsp), tempReg);
+        } else {
+            a.movaps(xmmword_ptr(rsp), tempReg);
+        }
+
+        // 2) Duplicate the live register to temp (never modify the original)
+        if (isYmm) {
+            a.vmovaps(tempReg, liveReg);
+        } else {
+            a.movaps(tempReg, liveReg);
+        }
+
+        // 3) Store directly to the global trace buffer using atomic index
         asmjit::Label skipTrace = a.newLabel();
-        // a.jmp(skipTrace); // Uncomment to disable tracing at runtime
-        
+
         // Save registers we're about to use
         a.push(rax);
         a.push(rcx);
         a.push(rdx);
-        
+
         // Calculate buffer index atomically (simple increment)
         a.mov(rcx, asmjit::imm((uint64_t)&g_traceBuffer.index));
         a.mov(edx, asmjit::x86::dword_ptr(rcx));  // Load current index (32-bit)
-        // Note: We use the index BEFORE incrementing for this record
         a.mov(rax, rdx);                           // Save current index in RAX
         a.inc(edx);                                // Increment for next record
-        a.mov(asmjit::x86::dword_ptr(rcx), edx);  // Store back (atomic-ish)
-        
+        a.mov(asmjit::x86::dword_ptr(rcx), edx);  // Store back
+
         // Calculate buffer position: (index & mask) * sizeof(TraceRecord)
         a.mov(rcx, asmjit::imm((uint64_t)&g_traceBuffer.mask));
         a.mov(ecx, asmjit::x86::dword_ptr(rcx));   // Load mask (32-bit)
         a.and_(eax, ecx);                           // (saved_index & mask) in EAX
-        a.mov(rdx, rax);                            // Move masked index to RDX for multiplication
-        
-        // edx now contains the buffer index
-        // Calculate offset: edx * sizeof(TraceRecord)
-        // The actual sizeof(TraceRecord) depends on alignment
-        a.imul(rdx, rdx, sizeof(TraceRecord));  // Multiply index by sizeof(TraceRecord) (extend to 64-bit)
-        
+        a.mov(rdx, rax);                            // Move masked index to RDX
+
+        // Calculate offset: rdx * sizeof(TraceRecord)
+        a.imul(rdx, rdx, sizeof(TraceRecord));
+
         // Get pointer to the record
         a.mov(rcx, asmjit::imm((uint64_t)&g_traceBuffer.records));
         a.mov(rcx, asmjit::x86::qword_ptr(rcx));  // Load records pointer
         a.add(rcx, rdx);  // rcx now points to the TraceRecord
-        
-        // Store metadata (node ID or instruction counter, operation type, vector width)
-        // For LOAD/STORE ops, store node ID. For others, store instruction counter
-        // Note: x86-64 cannot move immediate to memory directly, must go through register
+
+        // Store metadata
         int32_t idToStore = (nodeId >= 0) ? nodeId : static_cast<int32_t>(instructionCounter);
-        a.mov(asmjit::x86::edx, asmjit::imm(idToStore));                                   // Load immediate into EDX
-        a.mov(asmjit::x86::dword_ptr(rcx, 0), asmjit::x86::edx);                          // Store nodeId or instructionId
-        a.mov(asmjit::x86::edx, asmjit::imm(static_cast<uint32_t>(opType)));              // Load immediate into EDX
-        a.mov(asmjit::x86::dword_ptr(rcx, 4), asmjit::x86::edx);                          // Store operationType
-        a.mov(asmjit::x86::edx, asmjit::imm(static_cast<uint32_t>(vectorWidth)));         // Load immediate into EDX
-        a.mov(asmjit::x86::dword_ptr(rcx, 8), asmjit::x86::edx);                          // Store vectorWidth
-        
+        a.mov(asmjit::x86::edx, asmjit::imm(idToStore));
+        a.mov(asmjit::x86::dword_ptr(rcx, 0), asmjit::x86::edx);                          // nodeId or instructionId
+        a.mov(asmjit::x86::edx, asmjit::imm(static_cast<uint32_t>(opType)));
+        a.mov(asmjit::x86::dword_ptr(rcx, 4), asmjit::x86::edx);                          // operationType
+        a.mov(asmjit::x86::edx, asmjit::imm(static_cast<uint32_t>(vectorWidth)));
+        a.mov(asmjit::x86::dword_ptr(rcx, 8), asmjit::x86::edx);                          // vectorWidth
+
         // Store register info in timestamp field (16 bits for dst, 16 bits for src)
-        uint32_t regInfo = ((dstReg & 0xFFFF) << 16) | (srcReg & 0xFFFF);
-        a.mov(asmjit::x86::edx, asmjit::imm(regInfo));                                     // Load immediate into EDX
-        a.mov(asmjit::x86::dword_ptr(rcx, 16), asmjit::x86::edx);                         // Store in lower 32 bits of timestamp
-        
-        // Store the register data to the buffer (only 16 bytes for XMM)
-        // Data field offset depends on struct layout
-        a.movups(xmmword_ptr(rcx, offsetof(TraceRecord, data)), tempReg);
-        
+        uint32_t safeDstReg = (dstReg < 0) ? 0xFFFE : (dstReg & 0xFFFF);
+        uint32_t safeSrcReg = (srcReg < 0) ? 0xFFFE : (srcReg & 0xFFFF);
+        uint32_t regInfo = (safeDstReg << 16) | safeSrcReg;
+        a.mov(asmjit::x86::edx, asmjit::imm(regInfo));
+        a.mov(asmjit::x86::dword_ptr(rcx, 16), asmjit::x86::edx);
+
         instructionCounter++;
-        
+
+        // Store the register data to the buffer
+        if (isYmm) {
+            a.vmovups(ymmword_ptr(rcx, offsetof(TraceRecord, data)), tempReg);
+        } else {
+            a.movups(xmmword_ptr(rcx, offsetof(TraceRecord, data)), tempReg);
+        }
+
         // Restore registers we used
         a.pop(rdx);
         a.pop(rcx);
         a.pop(rax);
-        
-        // Restore XMM15 from stack
-        a.movaps(xmm15, xmmword_ptr(rsp));
-        a.add(rsp, 16);  // Deallocate stack space
-        
+
+        // Restore temp register from stack
+        if (isYmm) {
+            a.vmovups(ymm15, ymmword_ptr(rsp));
+        } else {
+            a.movaps(xmm15, xmmword_ptr(rsp));
+        }
+        a.add(rsp, stackSize);
+
         // Bind the skip label
         a.bind(skipTrace);
-        
+
         // liveReg remains completely unchanged and can be used normally
     }
-    
+
+    // Legacy methods for backward compatibility - delegate to unified emitTrace
+    void emitTraceYMM(asmjit::x86::Assembler& a, asmjit::x86::Vec liveReg,
+                      OperationType opType, int vectorWidth = 4, int nodeId = -1, int srcReg = -1, int dstReg = -1) {
+        emitTrace(a, liveReg.ymm(), opType, vectorWidth, nodeId, srcReg, dstReg);
+    }
+
+    void emitTraceXMM(asmjit::x86::Assembler& a, asmjit::x86::Vec liveReg,
+                      OperationType opType, int vectorWidth = 1, int nodeId = -1, int srcReg = -1, int dstReg = -1) {
+        emitTrace(a, liveReg.xmm(), opType, vectorWidth, nodeId, srcReg, dstReg);
+    }
+
     /**
      * @brief Reset instruction counter for new compilation
      *
