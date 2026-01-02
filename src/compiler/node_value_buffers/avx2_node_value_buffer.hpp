@@ -153,16 +153,19 @@ public:
         }
     }
 
+    // Override getGradientLanes with AVX2-optimized version
     void getGradientLanes(const std::vector<size_t>& bufferIndices, double* output) const override {
         if (!gradients_) return;
 
         for (size_t i = 0; i < bufferIndices.size(); ++i) {
             size_t baseIdx = bufferIndices[i];
-            // Load 4 contiguous doubles and store interleaved
+            // Load 4 contiguous doubles and store using AVX2
             __m256d grads = _mm256_load_pd(&gradients_[baseIdx]);
             _mm256_storeu_pd(&output[i * vector_width_], grads);
         }
     }
+
+    // setValueLanes and getValueLanes use default implementation from INodeValueBuffer
 
     // ==========================================================================
     // DEPRECATED API: Convenience wrappers (internally use Lanes)
