@@ -41,6 +41,7 @@ void ForwardStitcher::generateForwardOperation(
     const asmjit::Label& constPoolLabel,
     IRegisterAllocator& regState,
     IInstructionSet* instructionSet,
+    ICompilationPolicy* policy,
     bool deferStore
 ) {
     // Phase 1.4: Minimal set of operations for Linear function
@@ -51,12 +52,23 @@ void ForwardStitcher::generateForwardOperation(
 
     // Helper lambda to simplify ensureInRegister calls
     auto ensureInReg = [&](NodeId nId, std::initializer_list<int> avoid = {}) {
-        int reg = ensureInRegister(a, nId, regState, graph, constantMap, constPoolLabel, processedConstants, instructionSet, avoid);
+        int reg = ensureInRegister(a, nId, regState, graph, constantMap, constPoolLabel, processedConstants, instructionSet, policy, avoid);
         // Mark constant as processed if it is one (though this is now handled inside ensureInRegister)
         if (graph.nodes[nId].op == OpCode::Constant) {
             processedConstants.insert(nId);
         }
         return reg;
+    };
+
+    // Helper to allocate a result register, consulting policy first
+    auto allocateResultReg = [&](std::initializer_list<int> avoid = {}) {
+        if (policy) {
+            int policyReg = policy->getRegisterAssignment(nodeId, regState);
+            if (policyReg >= 0) {
+                return policyReg;
+            }
+        }
+        return regState.allocateAvoiding(avoid);
     };
 
     // Helper to try optimized store
@@ -1214,9 +1226,19 @@ int ForwardStitcher::ensureInRegister(
     const asmjit::Label& constPoolLabel,
     std::unordered_set<forge::NodeId>& processedConstants,
     IInstructionSet* instructionSet,
+    ICompilationPolicy* policy,
     std::initializer_list<int> avoid
 ) {
-    // First, check if the value is already in a register
+    // First, check if policy knows where this value is
+    if (policy) {
+        int policyReg = policy->getRegisterAssignment(nodeId, regState);
+        if (policyReg >= 0) {
+            // Policy says the value is (or should be) in this register
+            return policyReg;
+        }
+    }
+
+    // Check if the value is already in a register (default allocator tracking)
     int existingReg = regState.findNodeInRegister(nodeId);
     if (existingReg >= 0) {
         // Value is already in a register, return it
@@ -1224,7 +1246,18 @@ int ForwardStitcher::ensureInRegister(
     }
 
     // Value not in register, need to load it
-    int newReg = regState.allocateAvoiding(avoid);
+    // First check if policy wants a specific register for this node
+    int newReg;
+    if (policy) {
+        int policyReg = policy->getRegisterAssignment(nodeId, regState);
+        if (policyReg >= 0) {
+            newReg = policyReg;
+        } else {
+            newReg = regState.allocateAvoiding(avoid);
+        }
+    } else {
+        newReg = regState.allocateAvoiding(avoid);
+    }
 
     // If this register was dirty, flush it first
     if (regState.isDirty(newReg)) {

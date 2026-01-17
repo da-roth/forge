@@ -19,6 +19,7 @@
 #pragma once
 
 #include "../../graph/graph.hpp"
+#include "../x86/common/register_allocator_base.hpp"
 #include <asmjit/x86.h>
 #include <cstdint>
 
@@ -34,36 +35,39 @@ constexpr uint32_t COMPILATION_POLICY_API_VERSION = 1;
 /**
  * @brief Policy interface for controlling compilation decisions
  *
- * Allows customization of register allocation and memory management
+ * Allows full customization of register allocation and memory management
  * strategies during JIT compilation. The default implementation preserves
  * current forge behavior.
  *
  * Two usage patterns are supported:
  *
- * 1. Pre-computed: Analyze the entire graph in onCompileBegin(), then
- *    return pre-computed decisions from requiresStore()/preferredRegister().
+ * 1. Pre-computed: Analyze the entire graph in onCompileBegin(), compute
+ *    register assignments upfront, return them from getRegisterAssignment().
  *
- * 2. Dynamic: Make decisions on-the-fly based on runtime context,
- *    using onNodeBegin()/onNodeEnd() to track state.
+ * 2. Dynamic: Make decisions on-the-fly in getRegisterAssignment() based
+ *    on lifespan analysis or other heuristics.
  *
- * Example (pre-computed):
+ * Example (pre-computed full control):
  * @code
- * class GlobalOptimizationPolicy : public ICompilationPolicy {
- *     std::vector<int> nodeToReg_;
- *     std::vector<bool> needsStore_;
+ * class ManualRegisterPolicy : public ICompilationPolicy {
+ *     std::vector<int> assignment_;
  *
  * public:
  *     void onCompileBegin(const Graph& graph, asmjit::x86::Assembler& a) override {
- *         performLivenessAnalysis(graph);
- *         computeOptimalRegisterAssignment(graph);
+ *         assignment_.resize(graph.nodes.size());
+ *         // Pre-compute all register assignments
+ *         assignment_[0] = 9;   // Input 0 in register 9
+ *         assignment_[1] = 10;  // Input 1 in register 10
+ *         assignment_[2] = 0;   // Add result in register 0
+ *         // ...
  *     }
  *
- *     bool requiresStore(NodeId n, const Graph&) override {
- *         return needsStore_[n];
+ *     int getRegisterAssignment(NodeId nodeId, IRegisterAllocator&) override {
+ *         return assignment_[nodeId];  // Full control
  *     }
  *
- *     int preferredRegister(NodeId n) override {
- *         return nodeToReg_[n];
+ *     bool requiresStore(NodeId, const Graph&) override {
+ *         return false;  // Keep everything in registers
  *     }
  * };
  * @endcode
@@ -126,13 +130,33 @@ public:
         (void)nodeId; (void)resultRegister; (void)a;
     }
 
-    // === Allocation Decisions ===
+    // === Register Assignment ===
+
+    /**
+     * @brief Get the register assignment for a node's value
+     *
+     * This is the core method for register control. It is called:
+     * - When allocating a register for a node's result
+     * - When looking up where an operand's value is located
+     *
+     * Return a specific register index (0-15) for full control,
+     * or -1 to use the default allocator's decision.
+     *
+     * @param nodeId The node whose register assignment is needed
+     * @param defaultAllocator The default allocator (for fallback or queries)
+     * @return Register index (0-15) for full control, or -1 for default behavior
+     */
+    virtual int getRegisterAssignment(NodeId nodeId, IRegisterAllocator& defaultAllocator) {
+        (void)nodeId; (void)defaultAllocator;
+        return -1;  // Default: let allocator decide
+    }
+
+    // === Memory Store Decisions ===
 
     /**
      * @brief Should this node's result be written to memory immediately?
      *
      * Return false to defer the store (keep value in register longer).
-     * The deferStore parameter in ForwardStitcher uses the inverse of this.
      *
      * @param nodeId The node being processed
      * @param graph The computation graph
@@ -141,34 +165,6 @@ public:
     virtual bool requiresStore(NodeId nodeId, const Graph& graph) {
         (void)nodeId; (void)graph;
         return true;  // Default: always store (current behavior)
-    }
-
-    /**
-     * @brief Preferred register for this node's result
-     *
-     * Return a specific register index (0-15) to force placement,
-     * or -1 to let the allocator decide.
-     *
-     * @param nodeId The node being processed
-     * @return Register index (0-15) or -1 for no preference
-     */
-    virtual int preferredRegister(NodeId nodeId) {
-        (void)nodeId;
-        return -1;  // Default: let allocator decide
-    }
-
-    /**
-     * @brief Check if node's value is already in a register
-     *
-     * For custom tracking of values across nodes. Return the register
-     * index if you know where the value is, or -1 to use normal tracking.
-     *
-     * @param nodeId The node to look up
-     * @return Register index (0-15) or -1 if unknown
-     */
-    virtual int findValueRegister(NodeId nodeId) {
-        (void)nodeId;
-        return -1;  // Default: use normal register allocator tracking
     }
 };
 

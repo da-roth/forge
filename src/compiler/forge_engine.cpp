@@ -465,7 +465,7 @@ std::unique_ptr<StitchedKernel> ForgeEngine::compile(const Graph& graph) {
         bool deferStore = !policy_->requiresStore(nodeId, workingGraph);
 
         // Generate forward operation code
-        ForwardStitcher::generateForwardOperation(a, node, nodeId, workingGraph, constantMap, constPoolLabel, regState, instructionSet_.get(), deferStore);
+        ForwardStitcher::generateForwardOperation(a, node, nodeId, workingGraph, constantMap, constPoolLabel, regState, instructionSet_.get(), policy_.get(), deferStore);
 
         // Track maximum node ID
         maxNodeIdAccessed = std::max(maxNodeIdAccessed, nodeId);
