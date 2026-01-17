@@ -1,0 +1,223 @@
+##############################################################################
+#
+#  Test Downstream Integration (XAD Benchmarks)
+#
+#  Tests Forge changes against XAD's LiborSwaptionPricer benchmark.
+#  Based on XAD's benchmark-libor.yml workflow (Forge backend only).
+#
+#  Copyright (c) 2025 The Forge Authors
+#  SPDX-License-Identifier: Zlib
+#
+##############################################################################
+
+name: Test Downstream (XAD Benchmarks)
+
+on:
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'api/c/**'
+      - '.github/workflows/test-downstream-xad-benchmarks.yml'
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  ##############################################################################
+  # Linux Benchmark (Forge backend only)
+  ##############################################################################
+  linux:
+    name: XAD Benchmark / Linux
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/foonathan/gcc:13
+
+    steps:
+      - name: Hardware Info
+        run: |
+          echo "===== CPU ====="
+          lscpu | grep -E "^(Model name|CPU\(s\)|Thread|Core|Socket|CPU max MHz)"
+          echo "===== Memory ====="
+          free -h
+
+      - name: Checkout XAD
+        uses: actions/checkout@v4
+        with:
+          repository: auto-differentiation/xad
+          path: xad
+
+      - name: Checkout Forge (this PR)
+        uses: actions/checkout@v4
+        with:
+          path: forge
+          submodules: recursive
+
+      - name: Checkout xad-forge
+        uses: actions/checkout@v4
+        with:
+          repository: da-roth/xad-forge
+          path: xad-forge
+
+      - name: Setup
+        run: |
+          apt-get update
+          apt-get install -y ninja-build cmake
+
+      - name: Build Forge C API
+        run: |
+          cd forge
+          cmake -B build -S api/c -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DFORGE_CAPI_BUILD_TESTS=OFF \
+            -DCMAKE_INSTALL_PREFIX=$(pwd)/../install
+          cmake --build build
+          cmake --install build
+
+      - name: Build XAD
+        run: |
+          cd xad
+          cmake -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_CXX_STANDARD=17 \
+            -DXAD_ENABLE_JIT=ON \
+            -DXAD_ENABLE_TESTS=ON \
+            -DXAD_SIMD_OPTION=AVX2 \
+            -DXAD_NO_THREADLOCAL=ON \
+            -DXAD_USE_STRONG_INLINE=ON \
+            -DCMAKE_PREFIX_PATH=$(pwd)/../install \
+            -DCMAKE_INSTALL_PREFIX=$(pwd)/../install
+          cmake --build build --target xad
+          cmake --install build
+
+      - name: Build xad-forge
+        run: |
+          cd xad-forge
+          cmake -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_CXX_STANDARD=17 \
+            -DCMAKE_PREFIX_PATH=$(pwd)/../install \
+            -DXAD_FORGE_USE_CAPI=ON \
+            -DXAD_FORGE_BUILD_TESTS=OFF \
+            -DCMAKE_INSTALL_PREFIX=$(pwd)/../install
+          cmake --build build
+          cmake --install build
+
+      - name: Build Benchmark Target
+        run: |
+          INSTALL_DIR=$(pwd)/install
+          cd xad
+          cmake -B build-benchmark -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_CXX_STANDARD=17 \
+            -DXAD_ENABLE_JIT=ON \
+            -DXAD_ENABLE_TESTS=ON \
+            -DXAD_SIMD_OPTION=AVX2 \
+            -DXAD_NO_THREADLOCAL=ON \
+            -DXAD_USE_STRONG_INLINE=ON \
+            -DCMAKE_PREFIX_PATH=$INSTALL_DIR
+          cmake --build build-benchmark --target LiborSwaptionPricerJIT
+
+      - name: Run Benchmark
+        run: |
+          export LD_LIBRARY_PATH=$(pwd)/install/lib:$LD_LIBRARY_PATH
+          ./xad/build-benchmark/samples/LiborSwaptionPricer/JIT/LiborSwaptionPricerJIT
+
+  ##############################################################################
+  # Windows Benchmark (Forge backend only)
+  ##############################################################################
+  windows:
+    name: XAD Benchmark / Windows
+    runs-on: windows-2022
+
+    env:
+      VSVARSALL: C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat
+
+    steps:
+      - name: Checkout XAD
+        uses: actions/checkout@v4
+        with:
+          repository: auto-differentiation/xad
+          path: xad
+
+      - name: Checkout Forge (this PR)
+        uses: actions/checkout@v4
+        with:
+          path: forge
+          submodules: recursive
+
+      - name: Checkout xad-forge
+        uses: actions/checkout@v4
+        with:
+          repository: da-roth/xad-forge
+          path: xad-forge
+
+      - name: Setup
+        run: choco install -y ninja
+
+      - name: Build Forge C API
+        shell: cmd
+        run: |
+          cd forge
+          call "%VSVARSALL%" amd64
+          cmake -B build -S api/c -G Ninja ^
+            -DCMAKE_BUILD_TYPE=Release ^
+            -DFORGE_CAPI_BUILD_TESTS=OFF ^
+            -DCMAKE_INSTALL_PREFIX="%cd%\..\install"
+          cmake --build build
+          cmake --install build
+
+      - name: Build XAD
+        shell: cmd
+        run: |
+          cd xad
+          call "%VSVARSALL%" amd64
+          cmake -B build -G Ninja ^
+            -DCMAKE_BUILD_TYPE=Release ^
+            -DCMAKE_CXX_STANDARD=17 ^
+            -DXAD_ENABLE_JIT=ON ^
+            -DXAD_ENABLE_TESTS=ON ^
+            -DXAD_SIMD_OPTION=AVX2 ^
+            -DXAD_NO_THREADLOCAL=ON ^
+            -DXAD_USE_STRONG_INLINE=ON ^
+            -DCMAKE_PREFIX_PATH="%cd%\..\install" ^
+            -DCMAKE_INSTALL_PREFIX="%cd%\..\install"
+          cmake --build build --target xad
+          cmake --install build
+
+      - name: Build xad-forge
+        shell: cmd
+        run: |
+          cd xad-forge
+          call "%VSVARSALL%" amd64
+          cmake -B build -G Ninja ^
+            -DCMAKE_BUILD_TYPE=Release ^
+            -DCMAKE_CXX_STANDARD=17 ^
+            -DCMAKE_PREFIX_PATH="%cd%\..\install" ^
+            -DXAD_FORGE_USE_CAPI=ON ^
+            -DXAD_FORGE_BUILD_TESTS=OFF ^
+            -DCMAKE_INSTALL_PREFIX="%cd%\..\install"
+          cmake --build build
+          cmake --install build
+
+      - name: Build Benchmark Target
+        shell: cmd
+        run: |
+          set INSTALL_DIR=%cd%\install
+          cd xad
+          call "%VSVARSALL%" amd64
+          cmake -B build-benchmark -G Ninja ^
+            -DCMAKE_BUILD_TYPE=Release ^
+            -DCMAKE_CXX_STANDARD=17 ^
+            -DXAD_ENABLE_JIT=ON ^
+            -DXAD_ENABLE_TESTS=ON ^
+            -DXAD_SIMD_OPTION=AVX2 ^
+            -DXAD_NO_THREADLOCAL=ON ^
+            -DXAD_USE_STRONG_INLINE=ON ^
+            -DCMAKE_PREFIX_PATH="%INSTALL_DIR%"
+          cmake --build build-benchmark --target LiborSwaptionPricerJIT
+
+      - name: Run Benchmark
+        shell: cmd
+        run: |
+          set PATH=%cd%\install\bin;%PATH%
+          xad\build-benchmark\samples\LiborSwaptionPricer\JIT\LiborSwaptionPricerJIT.exe

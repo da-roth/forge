@@ -1,0 +1,260 @@
+##############################################################################
+#
+#  Test Downstream Integration (xad-forge)
+#
+#  Tests Forge changes against xad-forge before merging.
+#  Based on xad-forge's CI workflow with reduced matrix.
+#
+#  Copyright (c) 2025 The Forge Authors
+#  SPDX-License-Identifier: Zlib
+#
+##############################################################################
+
+name: Test Downstream (xad-forge)
+
+on:
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'api/c/**'
+      - '.github/workflows/test-downstream.yml'
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  ##############################################################################
+  # Windows - MSVC (representative config)
+  ##############################################################################
+  windows:
+    runs-on: windows-2022
+    name: xad-forge / Windows MSVC
+
+    env:
+      VSVARSALL: C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat
+
+    steps:
+      - name: Checkout xad-forge
+        uses: actions/checkout@v4
+        with:
+          path: xad-forge
+
+      - name: Checkout XAD
+        uses: actions/checkout@v4
+        with:
+          repository: auto-differentiation/xad
+          path: xad
+
+      - name: Checkout forge (this PR)
+        uses: actions/checkout@v4
+        with:
+          path: forge
+          submodules: recursive
+
+      - name: Setup
+        run: choco install -y ninja
+
+      - name: Build Forge C API
+        shell: cmd
+        run: |
+          cd forge
+          call "%VSVARSALL%" amd64
+          cmake -B build -S api/c -G Ninja ^
+            -DCMAKE_BUILD_TYPE=Release ^
+            -DFORGE_CAPI_BUILD_TESTS=OFF ^
+            -DCMAKE_INSTALL_PREFIX="%cd%\..\install"
+          cmake --build build
+          cmake --install build
+
+      - name: Build XAD
+        shell: cmd
+        run: |
+          cd xad
+          call "%VSVARSALL%" amd64
+          cmake -B build -G Ninja ^
+            -DCMAKE_BUILD_TYPE=Release ^
+            -DCMAKE_CXX_STANDARD=17 ^
+            -DXAD_ENABLE_JIT=ON ^
+            -DXAD_ENABLE_TESTS=OFF ^
+            -DCMAKE_INSTALL_PREFIX="%cd%\..\install"
+          cmake --build build --config Release
+          cmake --install build --config Release
+
+      - name: Build xad-forge
+        shell: cmd
+        run: |
+          cd xad-forge
+          call "%VSVARSALL%" amd64
+          set PATH=%cd%\..\install\bin;%PATH%
+          cmake -B build -G Ninja ^
+            -DCMAKE_BUILD_TYPE=Release ^
+            -DCMAKE_CXX_STANDARD=17 ^
+            -DCMAKE_PREFIX_PATH="%cd%\..\install" ^
+            -DXAD_FORGE_BUILD_TESTS=ON ^
+            -DXAD_FORGE_USE_CAPI=ON
+          cmake --build build --config Release
+
+      - name: Run Tests
+        shell: cmd
+        run: |
+          cd xad-forge\build
+          set PATH=%cd%\..\..\install\bin;%PATH%
+          ctest --output-on-failure
+
+  ##############################################################################
+  # Linux - GCC (representative config: GCC 13, C++17)
+  ##############################################################################
+  linux-gcc:
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/foonathan/gcc:13
+    name: xad-forge / Linux GCC
+
+    steps:
+      - name: Setup
+        run: |
+          apt-get update
+          apt-get install -y ninja-build build-essential cmake git
+
+      - name: Checkout xad-forge
+        uses: actions/checkout@v4
+        with:
+          path: xad-forge
+
+      - name: Checkout XAD
+        uses: actions/checkout@v4
+        with:
+          repository: auto-differentiation/xad
+          path: xad
+
+      - name: Checkout forge (this PR)
+        uses: actions/checkout@v4
+        with:
+          path: forge
+          submodules: recursive
+
+      - name: Build Forge C API
+        run: |
+          INSTALL_DIR=$(pwd)/install
+          cd forge
+          cmake -B build -S api/c -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_CXX_FLAGS="-std=c++17" \
+            -DFORGE_CAPI_BUILD_TESTS=OFF \
+            -DCMAKE_INSTALL_PREFIX=$INSTALL_DIR
+          cmake --build build
+          cmake --install build
+
+      - name: Build XAD
+        run: |
+          INSTALL_DIR=$(pwd)/install
+          cd xad
+          cmake -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_CXX_FLAGS="-std=c++17" \
+            -DXAD_ENABLE_JIT=ON \
+            -DXAD_ENABLE_TESTS=OFF \
+            -DCMAKE_INSTALL_PREFIX=$INSTALL_DIR
+          cmake --build build
+          cmake --install build
+
+      - name: Build xad-forge
+        run: |
+          INSTALL_DIR=$(pwd)/install
+          cd xad-forge
+          cmake -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_CXX_FLAGS="-std=c++17" \
+            -DCMAKE_PREFIX_PATH=$INSTALL_DIR \
+            -DXAD_FORGE_BUILD_TESTS=ON \
+            -DXAD_FORGE_USE_CAPI=ON
+          cmake --build build
+
+      - name: Run Tests
+        run: |
+          INSTALL_DIR=$(pwd)/install
+          cd xad-forge/build
+          export LD_LIBRARY_PATH=$INSTALL_DIR/lib:$LD_LIBRARY_PATH
+          ctest --output-on-failure
+
+  ##############################################################################
+  # Linux - Clang (representative config: Clang 17, C++17)
+  ##############################################################################
+  linux-clang:
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/foonathan/clang:17
+    name: xad-forge / Linux Clang
+
+    steps:
+      - name: Setup
+        run: |
+          apt-get update
+          apt-get install -y ninja-build build-essential cmake git
+
+      - name: Checkout xad-forge
+        uses: actions/checkout@v4
+        with:
+          path: xad-forge
+
+      - name: Checkout XAD
+        uses: actions/checkout@v4
+        with:
+          repository: auto-differentiation/xad
+          path: xad
+
+      - name: Checkout forge (this PR)
+        uses: actions/checkout@v4
+        with:
+          path: forge
+          submodules: recursive
+
+      - name: Build Forge C API
+        run: |
+          INSTALL_DIR=$(pwd)/install
+          cd forge
+          cmake -B build -S api/c -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_CXX_COMPILER=clang++ \
+            -DCMAKE_C_COMPILER=clang \
+            -DCMAKE_CXX_STANDARD=17 \
+            -DFORGE_CAPI_BUILD_TESTS=OFF \
+            -DCMAKE_INSTALL_PREFIX=$INSTALL_DIR
+          cmake --build build
+          cmake --install build
+
+      - name: Build XAD
+        run: |
+          INSTALL_DIR=$(pwd)/install
+          cd xad
+          cmake -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_CXX_COMPILER=clang++ \
+            -DCMAKE_C_COMPILER=clang \
+            -DCMAKE_CXX_STANDARD=17 \
+            -DXAD_ENABLE_JIT=ON \
+            -DXAD_ENABLE_TESTS=OFF \
+            -DCMAKE_INSTALL_PREFIX=$INSTALL_DIR
+          cmake --build build
+          cmake --install build
+
+      - name: Build xad-forge
+        run: |
+          INSTALL_DIR=$(pwd)/install
+          cd xad-forge
+          cmake -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_CXX_COMPILER=clang++ \
+            -DCMAKE_C_COMPILER=clang \
+            -DCMAKE_CXX_STANDARD=17 \
+            -DCMAKE_PREFIX_PATH=$INSTALL_DIR \
+            -DXAD_FORGE_BUILD_TESTS=ON \
+            -DXAD_FORGE_USE_CAPI=ON
+          cmake --build build
+
+      - name: Run Tests
+        run: |
+          INSTALL_DIR=$(pwd)/install
+          cd xad-forge/build
+          export LD_LIBRARY_PATH=$INSTALL_DIR/lib:$LD_LIBRARY_PATH
+          ctest --output-on-failure
