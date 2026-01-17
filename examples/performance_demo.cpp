@@ -8,7 +8,7 @@
 #include <native/fdouble.hpp>
 #include <graph/graph_recorder.hpp>
 #include <compiler/forge_engine.hpp>
-#include <compiler/node_value_buffers/node_value_buffer.hpp>
+#include <compiler/interfaces/node_value_buffer.hpp>
 #include <iostream>
 #include <iomanip>
 #include <chrono>

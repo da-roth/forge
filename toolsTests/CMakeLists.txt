@@ -21,8 +21,8 @@ if(NOT WIN32)
 endif()
 
 target_include_directories(forge_tools_tests PRIVATE
-    ${CMAKE_SOURCE_DIR}/src
-    ${CMAKE_SOURCE_DIR}/tools
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src
+    ${CMAKE_CURRENT_SOURCE_DIR}/../tools
 )
 
 target_compile_features(forge_tools_tests PRIVATE cxx_std_17)

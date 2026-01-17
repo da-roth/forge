@@ -12,8 +12,8 @@
 
 #include <graph/graph.hpp>
 #include <compiler/forge_engine.hpp>
-#include <compiler/compiler_config.hpp>
-#include <compiler/node_value_buffers/node_value_buffer.hpp>
+#include <compiler/x86/common/compiler_config.hpp>
+#include <compiler/interfaces/node_value_buffer.hpp>
 
 #include <memory>
 #include <string>

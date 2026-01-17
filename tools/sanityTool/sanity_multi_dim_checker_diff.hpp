@@ -12,7 +12,7 @@
 #include <native/fdouble.hpp>
 #include "../../src/graph/graph_recorder.hpp"
 #include "../../src/compiler/forge_engine.hpp"
-#include "../../src/compiler/node_value_buffers/node_value_buffer.hpp"
+#include "../../src/compiler/interfaces/node_value_buffer.hpp"
 
 namespace forge {
 namespace tools {

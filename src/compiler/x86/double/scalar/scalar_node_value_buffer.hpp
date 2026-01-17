@@ -1,6 +1,6 @@
 #pragma once
 
-#include "node_value_buffer.hpp"
+#include "../../../interfaces/node_value_buffer.hpp"
 
 namespace forge {
 

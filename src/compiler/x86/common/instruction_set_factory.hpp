@@ -16,9 +16,9 @@
 
 #pragma once
 
-#include "instruction_set.hpp"
-#include "instruction_sets/sse2_scalar_instruction_set.hpp"
-#include "instruction_sets/avx2_instruction_set.hpp"
+#include "../../interfaces/instruction_set.hpp"
+#include "../double/scalar/sse2_scalar_instruction_set.hpp"
+#include "../double/avx2/avx2_instruction_set.hpp"
 #include "compiler_config.hpp"
 #include <memory>
 #include <unordered_map>

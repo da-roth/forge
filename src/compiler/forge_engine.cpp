@@ -15,7 +15,7 @@
 #include "../graph/graph_optimizer.hpp"
 #include "gradient_stitcher.hpp"
 #include "forward_stitcher.hpp"
-#include "instruction_sets/sse2_scalar_instruction_set.hpp"
+#include "x86/double/scalar/sse2_scalar_instruction_set.hpp"
 #include <iostream>
 #include <iomanip>
 #include <stdexcept>

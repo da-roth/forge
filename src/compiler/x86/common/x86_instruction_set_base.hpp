@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../instruction_set.hpp"
+#include "../../interfaces/instruction_set.hpp"
 #include <cstdint>
 #include <cmath>
 

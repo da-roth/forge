@@ -7,6 +7,12 @@
 # automatic differentiation library for mathematical expressions.
 #
 # Dependencies (auto-fetched): AsmJit, nlohmann/json, SLEEF, GoogleTest
+#
+# Architecture:
+# The library is split into OBJECT libraries to support per-target compiler flags:
+# - forge_core: Graph, optimizer, compiler core (no SIMD flags)
+# - forge_x86_common: x86 common code (no SIMD flags)
+# - forge_x86_double_avx2: AVX2 instruction set implementation (-mavx2)
 
 cmake_minimum_required(VERSION 3.20)
 project(Forge VERSION 0.1.0 LANGUAGES CXX)
@@ -37,39 +43,44 @@ if(MSVC AND FORGE_USE_STATIC_RUNTIME)
     set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 endif()
 
-# Compiler-specific settings
-# IMPORTANT: We use variables (FORGE_COMPILE_OPTIONS, FORGE_LINK_OPTIONS) instead of
-# add_compile_options() because when Forge is used as a subdirectory in another project
-# (e.g., via QL_EXTERNAL_SUBDIRECTORIES), global add_compile_options() would pollute
-# the parent project's compile flags. Options like /arch:AVX2 can cause issues with
-# other libraries that expect different floating-point behavior.
-# These variables are applied to Forge targets via target_compile_options() below.
+# =============================================================================
+# Compiler Flags - Split by instruction set requirements
+# =============================================================================
+
+# Base compile options (no SIMD)
 if(MSVC AND NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-    # MSVC-specific flags (not for clang-cl)
-    set(FORGE_COMPILE_OPTIONS
+    set(FORGE_BASE_COMPILE_OPTIONS
         /W4 /permissive-
         /MP
         /Zi /FS
         /GL-
-        /arch:AVX2  # Enable AVX2 instructions and __AVX__ define for SLEEF
         /wd4996 /wd4100 /wd4189 /wd4456 /wd4702 /wd4244 /wd4267
+    )
+    set(FORGE_AVX2_COMPILE_OPTIONS
+        ${FORGE_BASE_COMPILE_OPTIONS}
+        /arch:AVX2
     )
     set(FORGE_LINK_OPTIONS /DEBUG:FULL /INCREMENTAL:NO)
 elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND MSVC)
-    # clang-cl specific flags
-    set(FORGE_COMPILE_OPTIONS
+    set(FORGE_BASE_COMPILE_OPTIONS
         /W4 /permissive-
         /Zi
-        /arch:AVX2  # Enable AVX2 instructions and __AVX__ define for SLEEF
         /wd4996 /wd4100 /wd4189 /wd4456 /wd4702 /wd4244 /wd4267
+    )
+    set(FORGE_AVX2_COMPILE_OPTIONS
+        ${FORGE_BASE_COMPILE_OPTIONS}
+        /arch:AVX2
     )
     set(FORGE_LINK_OPTIONS /DEBUG:FULL)
 else()
-    set(FORGE_COMPILE_OPTIONS
+    set(FORGE_BASE_COMPILE_OPTIONS
         -Wall -Wextra -Wpedantic
         -g
-        -mavx2  # Enable AVX2 instructions for SLEEF
         -fno-lto
+    )
+    set(FORGE_AVX2_COMPILE_OPTIONS
+        ${FORGE_BASE_COMPILE_OPTIONS}
+        -mavx2
     )
     set(FORGE_LINK_OPTIONS -fno-lto)
 endif()
@@ -87,9 +98,13 @@ endif()
 # Enable Position Independent Code for shared library linking
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-# AsmJit dependency
+# =============================================================================
+# Dependencies
+# =============================================================================
+
 include(FetchContent)
 
+# AsmJit dependency
 FetchContent_Declare(
     asmjit
     GIT_REPOSITORY https://github.com/asmjit/asmjit.git
@@ -123,90 +138,100 @@ set(BUILD_INLINE_HEADERS ON CACHE BOOL "Build SLEEF inline headers" FORCE)
 set(SLEEF_BUILD_SCALAR_LIB OFF CACHE BOOL "Don't build scalar library" FORCE)
 FetchContent_MakeAvailable(sleef)
 
-# Include directories - REMOVED global include_directories() calls
-# Previously used include_directories(${CMAKE_SOURCE_DIR}/src) which is WRONG when
-# Forge is used as a subdirectory (CMAKE_SOURCE_DIR would be the parent project).
-# All includes are now handled via target_include_directories() below using
-# CMAKE_CURRENT_SOURCE_DIR which correctly points to the Forge directory.
-
-# Main Forge library
-add_library(forge STATIC
-    # Native API types (operator-overloading based graph recording)
-    api/native/fdouble.cpp
-    api/native/fdouble.hpp
-    api/native/fbool.cpp
-    api/native/fbool.hpp
-    api/native/fint.cpp
-    api/native/fint.hpp
-
-    # Graph/Recording system
-    src/graph/graph.cpp
-    src/graph/graph.hpp
-    src/graph/graph_recorder.cpp
-    src/graph/graph_recorder.hpp
-    src/graph/handles.hpp
-
-    # Graph serialization tools
-    tools/graphSerialization/graph_serialization.cpp
-    tools/graphSerialization/graph_serialization.hpp
-
-    # Compiler/JIT implementation
-    src/compiler/forge_engine.cpp
-    src/compiler/forge_engine.hpp
-    src/compiler/forward_stitcher.cpp
-    src/compiler/forward_stitcher.hpp
-
-    src/compiler/node_value_buffers/node_value_buffer_factory.cpp
-    src/compiler/node_value_buffers/node_value_buffer.hpp
-    src/compiler/node_value_buffers/scalar_node_value_buffer.hpp
-    src/compiler/node_value_buffers/avx2_node_value_buffer.hpp
-    src/compiler/register_allocator.cpp
-    src/compiler/register_allocator.hpp
-    src/compiler/gradient_stitcher.cpp
-    src/compiler/gradient_stitcher.hpp
-    src/compiler/compiler_config.hpp
-    src/compiler/instruction_sets/x86_instruction_set_base.cpp
-    src/compiler/instruction_sets/x86_instruction_set_base.hpp
-    src/compiler/instruction_sets/avx2_instruction_set.cpp
-    src/compiler/instruction_sets/avx2_instruction_set.hpp
-
-    # Runtime tracing system
-    src/compiler/runtime_trace.cpp
-    src/compiler/runtime_trace.hpp
-    src/compiler/instruction_tracer.hpp
-
-    # Graph optimization
-    src/graph/graph_optimizer.cpp
-    src/graph/graph_optimizer.hpp
-    src/graph/graph_debug.hpp
-
-    # Graph optimization implementations
-    src/graph/optimizations/inactive_folding.cpp
-    src/graph/optimizations/inactive_folding.hpp
-    src/graph/optimizations/common_subexpression_elimination.cpp
-    src/graph/optimizations/common_subexpression_elimination.hpp
-    src/graph/optimizations/algebraic_simplification.cpp
-    src/graph/optimizations/algebraic_simplification.hpp
-    src/graph/optimizations/stability_cleaning.cpp
-    src/graph/optimizations/stability_cleaning.hpp
-    src/graph/optimizations/constant_cleanup.cpp
-    src/graph/optimizations/constant_cleanup.hpp
-    src/graph/optimizations/optimizations.hpp
-)
-
-# Link AsmJit, nlohmann_json, and SLEEF to Forge library
-# Note: We need both the AVX2-specific library and the main sleef library for helper functions
-target_link_libraries(forge PUBLIC asmjit nlohmann_json::nlohmann_json sleefavx2 sleef)
-target_include_directories(forge PUBLIC
+# Common include directories for all OBJECT libraries
+set(FORGE_INCLUDE_DIRS
     ${CMAKE_CURRENT_SOURCE_DIR}/src
-    ${CMAKE_CURRENT_SOURCE_DIR}/api          # For api/native/fdouble.hpp -> <native/fdouble.hpp>
+    ${CMAKE_CURRENT_SOURCE_DIR}/api
     ${CMAKE_CURRENT_SOURCE_DIR}/tools
     ${asmjit_SOURCE_DIR}/src
     ${sleef_BINARY_DIR}/include
 )
 
-# Apply Forge-specific compile and link options (PRIVATE so they don't propagate to dependents)
-target_compile_options(forge PRIVATE ${FORGE_COMPILE_OPTIONS})
+# =============================================================================
+# OBJECT Libraries - Each with appropriate compiler flags
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# forge_core: Graph, optimizer, native API (no SIMD intrinsics)
+# -----------------------------------------------------------------------------
+add_library(forge_core OBJECT
+    # Native API types (operator-overloading based graph recording)
+    api/native/fdouble.cpp
+    api/native/fbool.cpp
+    api/native/fint.cpp
+
+    # Graph/Recording system
+    src/graph/graph.cpp
+    src/graph/graph_recorder.cpp
+    src/graph/graph_optimizer.cpp
+
+    # Graph optimization implementations
+    src/graph/optimizations/inactive_folding.cpp
+    src/graph/optimizations/common_subexpression_elimination.cpp
+    src/graph/optimizations/algebraic_simplification.cpp
+    src/graph/optimizations/stability_cleaning.cpp
+    src/graph/optimizations/constant_cleanup.cpp
+
+    # Graph serialization tools
+    tools/graphSerialization/graph_serialization.cpp
+
+    # Compiler core (no SIMD intrinsics used)
+    src/compiler/forge_engine.cpp
+    src/compiler/forward_stitcher.cpp
+    src/compiler/gradient_stitcher.cpp
+    src/compiler/runtime_trace.cpp
+)
+target_include_directories(forge_core PUBLIC ${FORGE_INCLUDE_DIRS})
+target_compile_options(forge_core PRIVATE ${FORGE_BASE_COMPILE_OPTIONS})
+target_link_libraries(forge_core PUBLIC asmjit nlohmann_json::nlohmann_json)
+
+# -----------------------------------------------------------------------------
+# forge_x86_common: x86 common code, register allocator (no SIMD)
+# -----------------------------------------------------------------------------
+add_library(forge_x86_common OBJECT
+    src/compiler/x86/common/x86_instruction_set_base.cpp
+    src/compiler/x86/common/register_allocator.cpp
+)
+target_include_directories(forge_x86_common PUBLIC ${FORGE_INCLUDE_DIRS})
+target_compile_options(forge_x86_common PRIVATE ${FORGE_BASE_COMPILE_OPTIONS})
+target_link_libraries(forge_x86_common PUBLIC asmjit)
+
+# -----------------------------------------------------------------------------
+# forge_x86_double_avx2: AVX2 instruction set implementation (-mavx2)
+# Note: node_value_buffer_factory.cpp is here because it includes AVX2 buffer headers
+# -----------------------------------------------------------------------------
+add_library(forge_x86_double_avx2 OBJECT
+    src/compiler/x86/double/avx2/avx2_instruction_set.cpp
+    src/compiler/x86/common/node_value_buffer_factory.cpp
+)
+target_include_directories(forge_x86_double_avx2 PUBLIC ${FORGE_INCLUDE_DIRS})
+target_compile_options(forge_x86_double_avx2 PRIVATE ${FORGE_AVX2_COMPILE_OPTIONS})
+target_compile_definitions(forge_x86_double_avx2 PUBLIC SLEEF_STATIC_LIBS)
+target_link_libraries(forge_x86_double_avx2 PUBLIC asmjit sleefavx2 sleef)
+
+# =============================================================================
+# Main Forge Library - Combines all OBJECT libraries
+# =============================================================================
+
+add_library(forge STATIC
+    $<TARGET_OBJECTS:forge_core>
+    $<TARGET_OBJECTS:forge_x86_common>
+    $<TARGET_OBJECTS:forge_x86_double_avx2>
+)
+
+# Link dependencies
+target_link_libraries(forge PUBLIC asmjit nlohmann_json::nlohmann_json sleefavx2 sleef)
+
+# Include directories for consumers
+target_include_directories(forge PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/api
+    ${CMAKE_CURRENT_SOURCE_DIR}/tools
+    ${asmjit_SOURCE_DIR}/src
+    ${sleef_BINARY_DIR}/include
+)
+
+# Link options (applied to final library)
 target_link_options(forge PRIVATE ${FORGE_LINK_OPTIONS})
 
 # Define SLEEF_STATIC_LIBS for static linking on Windows
@@ -226,6 +251,10 @@ add_library(forge::forge ALIAS forge)
 if(WIN32)
     set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS OFF)
 endif()
+
+# =============================================================================
+# Tests and Examples
+# =============================================================================
 
 # Add tests subdirectory if it exists (can be disabled by parent project)
 if(NOT FORGE_SKIP_TESTS AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/CMakeLists.txt")
@@ -265,3 +294,4 @@ endif()
 # Print build configuration
 message(STATUS "Forge build type: ${CMAKE_BUILD_TYPE}")
 message(STATUS "C++ standard: ${CMAKE_CXX_STANDARD}")
+message(STATUS "Forge architecture: x86/double (scalar + AVX2)")

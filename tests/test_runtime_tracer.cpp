@@ -35,9 +35,9 @@
 #include <cmath>
 #include "../src/graph/graph.hpp"
 #include "../src/compiler/forge_engine.hpp"
-#include "../src/compiler/compiler_config.hpp"
+#include "../src/compiler/x86/common/compiler_config.hpp"
 #include "../src/compiler/runtime_trace.hpp"
-#include "../src/compiler/node_value_buffers/node_value_buffer.hpp"
+#include "../src/compiler/interfaces/node_value_buffer.hpp"
 #include "test_graphs.hpp"
 
 using namespace forge;

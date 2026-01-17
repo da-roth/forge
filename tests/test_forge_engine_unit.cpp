@@ -4,8 +4,8 @@
 #include <cmath>
 #include "../src/graph/graph.hpp"
 #include "../src/compiler/forge_engine.hpp"
-#include "../src/compiler/compiler_config.hpp"
-#include "../src/compiler/node_value_buffers/node_value_buffer.hpp"
+#include "../src/compiler/x86/common/compiler_config.hpp"
+#include "../src/compiler/interfaces/node_value_buffer.hpp"
 #include "test_graphs.hpp"
 
 using namespace forge;
@@ -559,8 +559,8 @@ TEST(ForgeEngineTestAVX2Optimized, CompileAndExecuteWithGradient) {
 // Register Allocator Unit Tests
 // ============================================================================
 
-#include "../src/compiler/xmm_register_allocator.hpp"
-#include "../src/compiler/ymm_register_allocator.hpp"
+#include "../src/compiler/x86/double/scalar/xmm_register_allocator.hpp"
+#include "../src/compiler/x86/double/avx2/ymm_register_allocator.hpp"
 
 // Test that exercises the LRU eviction path in allocateAvoiding()
 // This happens when all registers are occupied and we need to evict one

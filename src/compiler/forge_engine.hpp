@@ -17,14 +17,14 @@
 #pragma once
 
 #include "../graph/graph.hpp"  // Reuse existing Graph structure
-#include "node_value_buffers/node_value_buffer.hpp"
-#include "register_allocator.hpp"  // For backward compatibility
-#include "xmm_register_allocator.hpp"  // For SSE2
-#include "ymm_register_allocator.hpp"  // For AVX2
+#include "interfaces/node_value_buffer.hpp"
+#include "x86/common/register_allocator.hpp"  // For backward compatibility
+#include "x86/double/scalar/xmm_register_allocator.hpp"  // For SSE2
+#include "x86/double/avx2/ymm_register_allocator.hpp"  // For AVX2
 #include "../graph/graph_optimizer.hpp"
-#include "compiler_config.hpp"
-#include "instruction_set.hpp"
-#include "instruction_set_factory.hpp"
+#include "x86/common/compiler_config.hpp"
+#include "interfaces/instruction_set.hpp"
+#include "x86/common/instruction_set_factory.hpp"
 #include "runtime_trace.hpp"
 #include <asmjit/x86.h>
 #include <memory>
