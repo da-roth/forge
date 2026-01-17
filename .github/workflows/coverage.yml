@@ -1,0 +1,80 @@
+##############################################################################
+#
+#  Code Coverage
+#
+#  Runs tests with coverage instrumentation and uploads to Coveralls.
+#  Based on XAD's coverage setup.
+#
+#  Copyright (c) 2025 The Forge Authors
+#  SPDX-License-Identifier: Zlib
+#
+##############################################################################
+
+name: Coverage
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  ##############################################################################
+  # Linux GCC Coverage
+  ##############################################################################
+  coverage:
+    name: Linux GCC Coverage
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build gcc-13 g++-13 lcov
+
+      - name: Configure CMake with coverage
+        run: |
+          cmake -B build -S . -G Ninja \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_C_COMPILER=gcc-13 \
+            -DCMAKE_CXX_COMPILER=g++-13 \
+            -DCMAKE_CXX_FLAGS="-fprofile-arcs -ftest-coverage" \
+            -DCMAKE_EXE_LINKER_FLAGS="-lgcov"
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Coverage baseline
+        run: |
+          cd build
+          mkdir -p coverage tmp
+          lcov --no-external --capture --initial --directory ${{ github.workspace }} --output-file ./tmp/lcov_base.info
+
+      - name: Run tests
+        run: |
+          cd build
+          ctest --output-on-failure --parallel $(nproc)
+
+      - name: Collect coverage
+        run: |
+          cd build
+          lcov --no-external --capture --directory ${{ github.workspace }} --output-file ./tmp/lcov_run.info
+          lcov --add-tracefile ./tmp/lcov_base.info --add-tracefile ./tmp/lcov_run.info --output-file ./tmp/lcov_total.info
+          lcov --remove ./tmp/lcov_total.info "$PWD/*" "${{ github.workspace }}/test/*" "${{ github.workspace }}/third_party/*" --output-file ./coverage/lcov.info --ignore-errors unused
+
+      - name: Upload to Coveralls
+        uses: coverallsapp/github-action@master
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path-to-lcov: build/coverage/lcov.info
+
+      - name: Rerun coverage workaround
+        # from https://github.com/lemurheavy/coveralls-public/issues/1653#issuecomment-1251587119
+        run: |
+          curl --location --request GET 'https://coveralls.io/rerun_build?repo_token=${{ secrets.COVERALLS_REPO_TOKEN }}&build_num=${{ github.run_id }}'
