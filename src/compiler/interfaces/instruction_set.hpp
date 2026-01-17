@@ -25,6 +25,14 @@
 
 namespace forge {
 
+/**
+ * @brief API version for the IInstructionSet interface
+ *
+ * Increment this when making breaking changes to the interface.
+ * Custom implementations built against a different version may be incompatible.
+ */
+constexpr uint32_t INSTRUCTION_SET_API_VERSION = 1;
+
 // Forward declarations
 class ForgeEngine;
 
@@ -55,6 +63,16 @@ class ForgeEngine;
 class IInstructionSet {
 public:
     virtual ~IInstructionSet() = default;
+
+    /**
+     * @brief Get the API version this implementation was built against
+     *
+     * Used for version compatibility checking when loading custom implementations.
+     * Override only if you need custom version reporting.
+     *
+     * @return API version number
+     */
+    virtual uint32_t apiVersion() const { return INSTRUCTION_SET_API_VERSION; }
 
     /** @brief Get instruction set name (e.g., "SSE2-Scalar", "AVX2-Packed") */
     virtual std::string getName() const = 0;

@@ -35,11 +35,15 @@ asmjit::JitRuntime ForgeEngine::s_runtime;
 ForgeEngine::ForgeEngine() : config_(CompilerConfig::Default()) {
     // Create instruction set based on config - MUST pass the full config!
     instructionSet_ = InstructionSetFactory::create(config_.instructionSet, config_);
+    // Initialize with default policy
+    policy_ = std::make_unique<DefaultCompilationPolicy>();
 }
 
 ForgeEngine::ForgeEngine(const CompilerConfig& config) : config_(config) {
     // Create instruction set based on config - MUST pass the full config!
     instructionSet_ = InstructionSetFactory::create(config_.instructionSet, config_);
+    // Initialize with default policy
+    policy_ = std::make_unique<DefaultCompilationPolicy>();
 }
 
 ForgeEngine::~ForgeEngine() = default;
@@ -443,25 +447,41 @@ std::unique_ptr<StitchedKernel> ForgeEngine::compile(const Graph& graph) {
     auto codeGenStart = Clock::now();
     int nodesProcessed = 0;
 
+    // Notify policy that compilation is beginning
+    policy_->onCompileBegin(workingGraph, a);
+
     for (NodeId nodeId = 0; nodeId < workingGraph.nodes.size(); ++nodeId) {
         const Node& node = workingGraph.nodes[nodeId];
         if (node.isDead) continue;  // Skip dead nodes from optimization
+
+        // Notify policy before node processing
+        policy_->onNodeBegin(nodeId, a);
 
         // Track operation type timing
         auto opStart = Clock::now();
         std::string opName = getOpName(node.op);
 
+        // Get store decision from policy (inverted: requiresStore=true means deferStore=false)
+        bool deferStore = !policy_->requiresStore(nodeId, workingGraph);
+
         // Generate forward operation code
-        ForwardStitcher::generateForwardOperation(a, node, nodeId, workingGraph, constantMap, constPoolLabel, regState, instructionSet_.get(), false);
+        ForwardStitcher::generateForwardOperation(a, node, nodeId, workingGraph, constantMap, constPoolLabel, regState, instructionSet_.get(), deferStore);
 
         // Track maximum node ID
         maxNodeIdAccessed = std::max(maxNodeIdAccessed, nodeId);
+
+        // Notify policy after node processing
+        int resultReg = regState.findNodeInRegister(nodeId);
+        policy_->onNodeEnd(nodeId, resultReg, a);
 
         double opTime = Duration(Clock::now() - opStart).count();
         opTypeTime[opName] += opTime;
         opTypeCounts[opName]++;
         nodesProcessed++;
     }
+
+    // Notify policy that compilation is ending
+    policy_->onCompileEnd(a);
     
     // Generate function epilogue
     codeGenerationTime = Duration(Clock::now() - codeGenStart).count();

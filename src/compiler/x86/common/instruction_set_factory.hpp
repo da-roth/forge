@@ -8,7 +8,7 @@
  * @brief Factory for creating instruction set implementations
  *
  * Provides a factory pattern for instantiating SIMD instruction set backends.
- * Supports both static selection (via enum) and dynamic plugin registration.
+ * Supports both static selection (via enum) and dynamic registration by name.
  *
  * Thread Safety: Static methods are thread-safe for reading. Registration
  * methods should only be called during startup (not thread-safe).
@@ -32,9 +32,9 @@ namespace forge {
  *
  * Provides two ways to create instruction set backends:
  * 1. Static creation via CompilerConfig::InstructionSet enum
- * 2. Dynamic plugin registration via name strings
+ * 2. Dynamic registration via name strings
  *
- * The plugin system allows contributors to add new instruction sets without
+ * The registration system allows adding new instruction sets without
  * modifying existing code.
  *
  * API Stability: Stable
@@ -45,7 +45,7 @@ namespace forge {
  *     CompilerConfig::InstructionSet::SSE2_SCALAR);
  * @endcode
  *
- * Example (plugin):
+ * Example (dynamic):
  * @code
  * InstructionSetFactory::registerInstructionSet("MyISA",
  *     []() { return std::make_unique<MyInstructionSet>(); });
@@ -82,10 +82,10 @@ public:
     }
 
     /**
-     * @brief Register a custom instruction set (plugin system)
+     * @brief Register a custom instruction set
      *
      * Allows dynamic registration of new instruction set implementations.
-     * Call this during static initialization to register plugins.
+     * Call this during static initialization.
      *
      * @param name Unique name for the instruction set
      * @param factory Function that creates instruction set instances
@@ -97,20 +97,31 @@ public:
     }
 
     /**
-     * @brief Create instruction set by name (plugin system)
+     * @brief Create instruction set by name
      *
      * @param name Name of registered instruction set
      * @param config Compiler configuration
+     * @param checkVersion If true, throws if API version doesn't match
      * @return New instruction set instance, or SSE2-Scalar if name not found
+     * @throws std::runtime_error If checkVersion is true and versions don't match
      */
-    static std::unique_ptr<IInstructionSet> createByName(const std::string& name, const CompilerConfig& config = CompilerConfig::Default()) {
+    static std::unique_ptr<IInstructionSet> createByName(const std::string& name, const CompilerConfig& config = CompilerConfig::Default(), bool checkVersion = true) {
         auto& registry = getRegistry();
         auto it = registry.find(name);
-        
+
         if (it != registry.end()) {
-            return it->second();
+            auto instance = it->second();
+
+            if (checkVersion && instance->apiVersion() != INSTRUCTION_SET_API_VERSION) {
+                throw std::runtime_error(
+                    "Instruction set '" + name + "' was built against API version " +
+                    std::to_string(instance->apiVersion()) + ", but core expects version " +
+                    std::to_string(INSTRUCTION_SET_API_VERSION));
+            }
+
+            return instance;
         }
-        
+
         // Default to SSE2-Scalar if not found, but pass the config!
         return std::make_unique<SSE2ScalarInstructionSet>(config);
     }
@@ -126,7 +137,7 @@ public:
 
     /**
      * @brief Get list of all available instruction sets
-     * @return Vector of instruction set names (includes built-in and plugins)
+     * @return Vector of instruction set names (includes built-in and registered)
      */
     static std::vector<std::string> getAvailableInstructionSets() {
         std::vector<std::string> names;
@@ -140,7 +151,7 @@ public:
     }
     
 private:
-    // Registry for dynamically loaded instruction sets
+    // Registry for dynamically registered instruction sets
     static std::unordered_map<std::string, CreateFunc>& getRegistry() {
         static std::unordered_map<std::string, CreateFunc> registry;
         return registry;
