@@ -14,7 +14,7 @@
 #include "../../src/graph/graph_recorder.hpp"
 #include "../../src/compiler/forge_engine.hpp"
 #include "../../src/compiler/interfaces/node_value_buffer.hpp"
-#include "../../src/compiler/compiler_config.hpp"
+#include "../../src/compiler/x86/common/compiler_config.hpp"
 #include "../../src/compiler/x86/double/avx2/avx2_instruction_set.hpp"
 
 namespace forge {
