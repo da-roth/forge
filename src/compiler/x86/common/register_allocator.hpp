@@ -29,8 +29,8 @@
  * API Stability: Stable (part of public JIT compiler interface)
  *
  * Note: This class is in transition. XmmRegisterAllocator and YmmRegisterAllocator
- * (in instruction_sets/) provide instruction-set-specific versions. This class
- * maintains backward compatibility during the refactoring.
+ * (in x86/double/scalar/ and x86/double/avx2/) provide instruction-set-specific
+ * versions. This class maintains backward compatibility during the refactoring.
  */
 
 #pragma once

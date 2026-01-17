@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include "../src/compiler/compiler_config.hpp"
+#include "../src/compiler/x86/common/compiler_config.hpp"
 #include <cstdlib>
 #ifdef _WIN32
 #include <stdlib.h>  // For _putenv_s

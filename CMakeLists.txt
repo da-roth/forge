@@ -206,6 +206,7 @@ add_library(forge_x86_double_avx2 OBJECT
 )
 target_include_directories(forge_x86_double_avx2 PUBLIC ${FORGE_INCLUDE_DIRS})
 target_compile_options(forge_x86_double_avx2 PRIVATE ${FORGE_AVX2_COMPILE_OPTIONS})
+target_compile_definitions(forge_x86_double_avx2 PUBLIC SLEEF_STATIC_LIBS)
 target_link_libraries(forge_x86_double_avx2 PUBLIC asmjit sleefavx2 sleef)
 
 # =============================================================================
