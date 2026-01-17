@@ -54,7 +54,7 @@ jobs:
         run: |
           cd build
           mkdir -p coverage tmp
-          lcov --no-external --capture --initial --directory ${{ github.workspace }} --output-file ./tmp/lcov_base.info --ignore-errors mismatch
+          lcov --no-external --capture --initial --directory ${{ github.workspace }} --output-file ./tmp/lcov_base.info --ignore-errors mismatch,negative
 
       - name: Run tests
         run: |
@@ -64,9 +64,9 @@ jobs:
       - name: Collect coverage
         run: |
           cd build
-          lcov --no-external --capture --directory ${{ github.workspace }} --output-file ./tmp/lcov_run.info --ignore-errors mismatch
-          lcov --add-tracefile ./tmp/lcov_base.info --add-tracefile ./tmp/lcov_run.info --output-file ./tmp/lcov_total.info
-          lcov --remove ./tmp/lcov_total.info "$PWD/*" "${{ github.workspace }}/test/*" "${{ github.workspace }}/third_party/*" --output-file ./coverage/lcov.info --ignore-errors unused,mismatch
+          lcov --no-external --capture --directory ${{ github.workspace }} --output-file ./tmp/lcov_run.info --ignore-errors mismatch,negative
+          lcov --add-tracefile ./tmp/lcov_base.info --add-tracefile ./tmp/lcov_run.info --output-file ./tmp/lcov_total.info --ignore-errors negative
+          lcov --remove ./tmp/lcov_total.info "$PWD/*" "${{ github.workspace }}/test/*" "${{ github.workspace }}/third_party/*" --output-file ./coverage/lcov.info --ignore-errors unused,mismatch,negative
 
       - name: Upload to Coveralls
         uses: coverallsapp/github-action@master
