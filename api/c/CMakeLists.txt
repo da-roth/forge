@@ -103,6 +103,24 @@ target_include_directories(forge_capi PUBLIC
 # Link forge and its dependencies statically into the shared library
 target_link_libraries(forge_capi PRIVATE forge)
 
+##############################################################################
+# Per-file compile options for instruction-set-specific implementations
+##############################################################################
+#
+# If you add C API files that use SIMD intrinsics directly, apply the
+# appropriate compile flags to those specific files:
+#
+# Example for a file that needs AVX2 intrinsics:
+#   set_source_files_properties(
+#       forge_avx2_c_api.cpp
+#       PROPERTIES COMPILE_OPTIONS "-mavx2"
+#   )
+#
+# This ensures only that file is compiled with the special flags, avoiding
+# performance regressions in other code paths. See the root CMakeLists.txt
+# for the OBJECT library pattern used for the main Forge library.
+#
+
 # On Linux/macOS, hide all symbols except the C API
 if(NOT WIN32)
     target_link_options(forge_capi PRIVATE
