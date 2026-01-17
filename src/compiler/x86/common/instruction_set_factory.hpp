@@ -79,13 +79,13 @@ public:
         switch(type) {
             case CompilerConfig::InstructionSet::SSE2_SCALAR:
                 return std::make_unique<SSE2ScalarInstructionSet>(config);
-            
+
             case CompilerConfig::InstructionSet::AVX2_PACKED:
                 return std::make_unique<AVX2InstructionSet>(config);
-            
+
             // Future instruction sets will be added here by contributors
             // No modification to existing cases needed
-            
+
             default:
                 // Fallback to SSE2-Scalar if unknown
                 return std::make_unique<SSE2ScalarInstructionSet>(config);
