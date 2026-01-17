@@ -24,6 +24,17 @@
 #include <unordered_map>
 #include <functional>
 #include <stdexcept>
+#include <vector>
+
+// Platform-specific dynamic loading
+#ifdef _WIN32
+    #ifndef WIN32_LEAN_AND_MEAN
+        #define WIN32_LEAN_AND_MEAN
+    #endif
+    #include <windows.h>
+#else
+    #include <dlfcn.h>
+#endif
 
 namespace forge {
 
@@ -142,20 +153,146 @@ public:
     static std::vector<std::string> getAvailableInstructionSets() {
         std::vector<std::string> names;
         names.push_back("SSE2-Scalar"); // Always available
-        
+
         for (const auto& [name, _] : getRegistry()) {
             names.push_back(name);
         }
-        
+
         return names;
     }
-    
+
+    /**
+     * @brief Load a backend from a shared library at runtime
+     *
+     * Loads the specified shared library and calls its registration function.
+     * The library should export a C function with signature:
+     *     extern "C" void forge_register_backend();
+     *
+     * This function should call InstructionSetFactory::registerInstructionSet()
+     * to register the custom instruction set(s) provided by the library.
+     *
+     * @param libraryPath Path to the shared library (.so on Linux, .dll on Windows)
+     * @return true if library was loaded and registration function called successfully
+     * @throws std::runtime_error If library cannot be loaded or has no registration function
+     *
+     * Example:
+     * @code
+     * // Load a custom AVX-512 backend
+     * InstructionSetFactory::loadBackend("./libforge_avx512.so");
+     *
+     * // Now the instruction set is available
+     * auto avx512 = InstructionSetFactory::createByName("AVX512-Packed");
+     * @endcode
+     *
+     * Writing a backend library:
+     * @code
+     * // In your backend library (e.g., avx512_backend.cpp):
+     * #include "instruction_set_factory.hpp"
+     *
+     * class AVX512InstructionSet : public forge::IInstructionSet {
+     *     // ... implementation ...
+     * };
+     *
+     * extern "C" void forge_register_backend() {
+     *     forge::InstructionSetFactory::registerInstructionSet(
+     *         "AVX512-Packed",
+     *         []() { return std::make_unique<AVX512InstructionSet>(); }
+     *     );
+     * }
+     * @endcode
+     */
+    static bool loadBackend(const std::string& libraryPath) {
+        using RegisterFunc = void(*)();
+
+#ifdef _WIN32
+        HMODULE handle = LoadLibraryA(libraryPath.c_str());
+        if (!handle) {
+            DWORD error = GetLastError();
+            throw std::runtime_error(
+                "Failed to load library '" + libraryPath + "': error code " + std::to_string(error));
+        }
+
+        RegisterFunc registerFunc = reinterpret_cast<RegisterFunc>(
+            GetProcAddress(handle, "forge_register_backend"));
+
+        if (!registerFunc) {
+            FreeLibrary(handle);
+            throw std::runtime_error(
+                "Library '" + libraryPath + "' does not export 'forge_register_backend'");
+        }
+
+        getLibraryHandles().push_back(handle);
+#else
+        void* handle = dlopen(libraryPath.c_str(), RTLD_NOW | RTLD_LOCAL);
+        if (!handle) {
+            throw std::runtime_error(
+                "Failed to load library '" + libraryPath + "': " + dlerror());
+        }
+
+        dlerror(); // Clear any existing error
+
+        RegisterFunc registerFunc = reinterpret_cast<RegisterFunc>(
+            dlsym(handle, "forge_register_backend"));
+
+        const char* dlsymError = dlerror();
+        if (dlsymError) {
+            dlclose(handle);
+            throw std::runtime_error(
+                "Library '" + libraryPath + "' does not export 'forge_register_backend': " + dlsymError);
+        }
+
+        if (!registerFunc) {
+            dlclose(handle);
+            throw std::runtime_error(
+                "Library '" + libraryPath + "' does not export 'forge_register_backend'");
+        }
+
+        getLibraryHandles().push_back(handle);
+#endif
+
+        registerFunc();
+        return true;
+    }
+
+    /**
+     * @brief Unload all dynamically loaded backend libraries
+     *
+     * Clears the registry of dynamically loaded backends and unloads
+     * their shared libraries. Built-in instruction sets remain available.
+     */
+    static void unloadAllBackends() {
+#ifdef _WIN32
+        for (HMODULE handle : getLibraryHandles()) {
+            FreeLibrary(handle);
+        }
+#else
+        for (void* handle : getLibraryHandles()) {
+            dlclose(handle);
+        }
+#endif
+        getLibraryHandles().clear();
+        getRegistry().clear();
+    }
+
 private:
     // Registry for dynamically registered instruction sets
     static std::unordered_map<std::string, CreateFunc>& getRegistry() {
         static std::unordered_map<std::string, CreateFunc> registry;
         return registry;
     }
+
+    // Storage for loaded library handles (prevents unloading while in use)
+#ifdef _WIN32
+    static std::vector<HMODULE>& getLibraryHandles() {
+        static std::vector<HMODULE> handles;
+        return handles;
+    }
+#else
+    static std::vector<void*>& getLibraryHandles() {
+        static std::vector<void*> handles;
+        return handles;
+    }
+#endif
 };
 
 /**
