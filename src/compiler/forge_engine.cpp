@@ -40,8 +40,14 @@ ForgeEngine::ForgeEngine() : config_(CompilerConfig::Default()) {
 }
 
 ForgeEngine::ForgeEngine(const CompilerConfig& config) : config_(config) {
-    // Create instruction set based on config - MUST pass the full config!
-    instructionSet_ = InstructionSetFactory::create(config_.instructionSet, config_);
+    // Create instruction set based on config
+    if (config_.useNamedInstructionSet && !config_.instructionSetName.empty()) {
+        // Use dynamically registered instruction set by name
+        instructionSet_ = InstructionSetFactory::createByName(config_.instructionSetName, config_);
+    } else {
+        // Use enum-based selection (built-in instruction sets)
+        instructionSet_ = InstructionSetFactory::create(config_.instructionSet, config_);
+    }
     // Initialize with default policy
     policy_ = std::make_unique<DefaultCompilationPolicy>();
 }
@@ -53,7 +59,17 @@ asmjit::JitRuntime& ForgeEngine::getRuntime() {
 }
 
 std::unique_ptr<IRegisterAllocator> ForgeEngine::createRegisterAllocator() const {
-    // Create appropriate allocator based on instruction set
+    // For dynamically loaded backends, use vector width to determine allocator
+    if (config_.useNamedInstructionSet && instructionSet_) {
+        int vectorWidth = instructionSet_->getVectorWidth();
+        if (vectorWidth >= 4) {
+            return std::make_unique<YmmRegisterAllocator>();
+        } else {
+            return std::make_unique<XmmRegisterAllocator>();
+        }
+    }
+
+    // Create appropriate allocator based on instruction set enum
     switch (config_.instructionSet) {
         case CompilerConfig::InstructionSet::AVX2_PACKED:
             return std::make_unique<YmmRegisterAllocator>();
