@@ -1,8 +1,8 @@
 #pragma once
 
-#include "x86_instruction_set_base.hpp"
-#include "../xmm_register_allocator.hpp"  // Use XMM-specific allocator
-#include "../instruction_tracer.hpp"      // For runtime tracing
+#include "../../common/x86_instruction_set_base.hpp"
+#include "xmm_register_allocator.hpp"  // Use XMM-specific allocator
+#include "../../common/instruction_tracer.hpp"      // For runtime tracing
 #include <cmath>
 #include <climits>
 #include <cstring>  // For memcpy

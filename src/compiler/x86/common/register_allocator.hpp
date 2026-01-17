@@ -35,7 +35,7 @@
 
 #pragma once
 
-#include "../graph/graph.hpp"  // For NodeId
+#include "../../../graph/graph.hpp"  // For NodeId
 #include "register_allocator_base.hpp"  // For IRegisterAllocator interface
 #include <initializer_list>
 

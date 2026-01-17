@@ -18,8 +18,8 @@
 #pragma once
 
 #include <asmjit/x86.h>
-#include "../graph/graph.hpp"
-#include "register_allocator_base.hpp"  // Use new base interface
+#include "../../graph/graph.hpp"
+#include "../x86/common/register_allocator_base.hpp"  // Use new base interface
 #include <memory>
 #include <string>
 

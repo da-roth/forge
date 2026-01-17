@@ -1,6 +1,6 @@
 #include "avx2_instruction_set.hpp"
-#include "../ymm_register_allocator.hpp"  // Use YMM-specific allocator
-#include "../runtime_trace.hpp"           // For runtime tracing
+#include "ymm_register_allocator.hpp"  // Use YMM-specific allocator
+#include "../../../runtime_trace.hpp"           // For runtime tracing
 #include <immintrin.h>  // For AVX2 intrinsics
 #include <algorithm>  // For std::max
 #include <cmath>     // For std::exp and std::log

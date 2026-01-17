@@ -17,7 +17,7 @@
 
 #pragma once
 
-#include "runtime_trace.hpp"
+#include "../../runtime_trace.hpp"
 #include "compiler_config.hpp"
 #include <asmjit/x86.h>
 #include <cstdint>

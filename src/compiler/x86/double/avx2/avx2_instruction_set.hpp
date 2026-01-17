@@ -1,9 +1,9 @@
 #pragma once
 
-#include "x86_instruction_set_base.hpp"
-#include "../register_allocator_base.hpp"
+#include "../../common/x86_instruction_set_base.hpp"
+#include "../../common/register_allocator_base.hpp"
 #include "avx2_transcendental_helpers.hpp"  // For helper functions
-#include "../instruction_tracer.hpp"        // For runtime tracing
+#include "../../common/instruction_tracer.hpp"        // For runtime tracing
 #include <cmath>
 #include <climits>
 #include <cstring>  // For memcpy

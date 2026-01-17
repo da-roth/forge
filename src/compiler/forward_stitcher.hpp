@@ -18,10 +18,10 @@
 #pragma once
 
 #include "../graph/graph.hpp"
-#include "register_allocator_base.hpp"
-#include "compiler_config.hpp"
+#include "x86/common/register_allocator_base.hpp"
+#include "x86/common/compiler_config.hpp"
 #include "forge_engine.hpp"
-#include "instruction_set.hpp"
+#include "interfaces/instruction_set.hpp"
 #include <asmjit/x86.h>
 #include <unordered_map>
 

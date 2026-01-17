@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include "../graph/graph.hpp"
+#include "../../../graph/graph.hpp"
 #include <climits>
 #include <stdexcept>
 #include <initializer_list>

@@ -1,7 +1,7 @@
-#include "node_value_buffer.hpp"
-#include "scalar_node_value_buffer.hpp"
-#include "avx2_node_value_buffer.hpp"
-#include "../../compiler/forge_engine.hpp"
+#include "../../interfaces/node_value_buffer.hpp"
+#include "../double/scalar/scalar_node_value_buffer.hpp"
+#include "../double/avx2/avx2_node_value_buffer.hpp"
+#include "../../forge_engine.hpp"
 
 namespace forge {
 
