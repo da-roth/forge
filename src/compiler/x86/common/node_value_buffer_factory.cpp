@@ -1,11 +1,29 @@
 #include "../../interfaces/node_value_buffer.hpp"
 #include "../double/scalar/scalar_node_value_buffer.hpp"
-#ifdef FORGE_BUNDLE_AVX2
-#include "../../../../backends/double/avx2/avx2_node_value_buffer.hpp"
-#endif
 #include "../../forge_engine.hpp"
 
 namespace forge {
+
+// Registry for buffer creators (allows AVX2 to register without header dependency)
+namespace {
+    // Function signature for creating buffers
+    using BufferCreatorFunc = std::unique_ptr<INodeValueBuffer>(*)(
+        const forge::Graph& optimizedTape,
+        const std::vector<forge::NodeId>& mapping,
+        size_t requiredNodes);
+
+    // Registry of buffer creators by vector width
+    BufferCreatorFunc g_avx2BufferCreator = nullptr;
+}
+
+// Called by AVX2 static registration to register the AVX2 buffer creator
+void NodeValueBufferFactory::registerAVX2BufferCreator(
+    std::unique_ptr<INodeValueBuffer>(*creator)(
+        const forge::Graph&,
+        const std::vector<forge::NodeId>&,
+        size_t)) {
+    g_avx2BufferCreator = creator;
+}
 
 std::unique_ptr<INodeValueBuffer> NodeValueBufferFactory::create(
     const forge::Graph& tape,
@@ -39,12 +57,11 @@ std::unique_ptr<INodeValueBuffer> NodeValueBufferFactory::create(
     if (vectorWidth == 1) {
         return std::make_unique<ScalarNodeValueBuffer>(optimizedTape, mapping);
     } else if (vectorWidth == 4) {
-#ifdef FORGE_BUNDLE_AVX2
-        // Use the new constructor that takes exact kernel size for proper propagation
-        return std::make_unique<AVX2NodeValueBuffer>(optimizedTape, mapping, requiredNodes);
-#else
-        throw std::runtime_error("AVX2 backend not bundled. Load AVX2 backend at runtime first.");
-#endif
+        if (g_avx2BufferCreator) {
+            return g_avx2BufferCreator(optimizedTape, mapping, requiredNodes);
+        }
+        throw std::runtime_error("AVX2 buffer creator not registered. "
+                                 "Bundle AVX2 or load AVX2 backend at runtime first.");
     } else {
         throw std::runtime_error("Unsupported vector width: " + std::to_string(vectorWidth));
     }

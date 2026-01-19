@@ -388,13 +388,29 @@ protected:
 };
 
 /**
- * Factory for creating appropriate NodeValueBuffer based on kernel requirements
+ * Factory for creating appropriate NodeValueBuffer based on kernel requirements.
+ * Uses a registration pattern so AVX2 can register its buffer creator without
+ * requiring the factory to include AVX2 headers directly.
  */
 class NodeValueBufferFactory {
 public:
+    /**
+     * Create a buffer appropriate for the kernel's vector width.
+     * For vectorWidth==4, requires AVX2 buffer creator to be registered.
+     */
     static std::unique_ptr<INodeValueBuffer> create(
         const forge::Graph& tape,
         const StitchedKernel& kernel);
+
+    /**
+     * Register the AVX2 buffer creator function.
+     * Called by AVX2 static initialization when AVX2 is bundled.
+     */
+    static void registerAVX2BufferCreator(
+        std::unique_ptr<INodeValueBuffer>(*creator)(
+            const forge::Graph& optimizedTape,
+            const std::vector<forge::NodeId>& mapping,
+            size_t requiredNodes));
 };
 
 } // namespace forge

@@ -19,14 +19,28 @@
  */
 
 #include "avx2_instruction_set.hpp"
+#include "avx2_node_value_buffer.hpp"
 #include "compiler/x86/common/instruction_set_factory.hpp"
+#include "compiler/interfaces/node_value_buffer.hpp"
+
+namespace {
+
+// AVX2 buffer creator function for dynamic loading
+std::unique_ptr<forge::INodeValueBuffer> createAVX2Buffer(
+    const forge::Graph& optimizedTape,
+    const std::vector<forge::NodeId>& mapping,
+    size_t requiredNodes) {
+    return std::make_unique<forge::AVX2NodeValueBuffer>(optimizedTape, mapping, requiredNodes);
+}
+
+} // anonymous namespace
 
 /**
  * @brief Entry point for dynamic backend loading
  *
  * This function is called by InstructionSetFactory::loadBackend() when
  * the shared library is loaded. It registers the AVX2 instruction set
- * with the factory.
+ * and buffer creator with the factory.
  *
  * The function must be exported with C linkage to avoid name mangling.
  */
@@ -38,10 +52,14 @@ __declspec(dllexport)
 __attribute__((visibility("default")))
 #endif
 void forge_register_backend() {
+    // Register instruction set
     forge::InstructionSetFactory::registerInstructionSet(
         "AVX2-Packed",
         []() { return std::make_unique<forge::AVX2InstructionSet>(); }
     );
+
+    // Register buffer creator
+    forge::NodeValueBufferFactory::registerAVX2BufferCreator(createAVX2Buffer);
 }
 
 } // extern "C"
