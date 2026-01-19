@@ -1,12 +1,26 @@
 <div align="center">
   <img src="forgeGPT.png" alt="Forge Logo" width="170"/>
   <h3>FORGE — Forward & Reverse Gradient Engine</h3>
-  <p>JIT compiler for mathematical expressions with automatic differentiation</p>
 </div>
 
 <br/>
 
-FORGE compiles computation graphs into optimized x86-64 machine code. Record once, compile once, evaluate many times at native speed — ideal for Monte Carlo methods, scenario analysis, and model calibration where the same computation runs repeatedly with different inputs.
+FORGE is a JIT compilation engine for mathematical expressions with automatic differentiation. It follows a **record-once, compile-once, evaluate-many** paradigm: the computation graph is recorded once, compiled to optimized x86-64 machine code, and the resulting kernel can be re-evaluated with different inputs at native speed.
+
+This approach is beneficial when the same computation must be repeated many times with varying inputs — such as Monte Carlo methods, scenario evaluation, or model calibration — where the JIT compilation overhead is amortized across evaluations.
+
+## When to Use Forge
+
+Forge is designed for **repeated evaluation** scenarios where the computation structure remains constant but inputs vary:
+
+- **Monte Carlo methods**: Pricing, XVA, or any path-dependent calculation
+- **Scenario evaluation**: Stress testing, what-if analysis, or parameter sweeps
+- **Greeks and sensitivities**: Fast gradient computation across market moves
+- **Model calibration**: Repeated function and gradient evaluation during parameter fitting
+
+**Trade-off**: Forge incurs an upfront compilation cost. For single evaluations, traditional tape-based AD is faster. The break-even depends on graph complexity, but typically occurs after 10–50 repeated evaluations.
+
+**Important**: The recorded computation graph must have the same structure for all inputs. For functions with branches, see [api/native/](api/native/) for how to record both paths using `fbool` and `If()`.
 
 ## Quick Example
 
@@ -64,10 +78,10 @@ target_link_libraries(your_target PRIVATE forge::forge)
 
 ## Key Features
 
-- **JIT Compilation** — Native x86-64 machine code via [AsmJit](https://github.com/asmjit/asmjit)
-- **Reverse-mode AD** — Automatic gradient computation
-- **Graph Optimizations** — CSE, constant folding, algebraic simplification
-- **Modular Backends** — SSE2 (default) + AVX2, extensible for custom SIMD
+- **JIT Compilation**: Native x86-64 machine code via [AsmJit](https://github.com/asmjit/asmjit)
+- **Reverse-mode AD**: Automatic gradient computation
+- **Graph Optimizations**: CSE, constant folding, algebraic simplification
+- **Modular Backends**: SSE2 (default) + AVX2, extensible for custom SIMD
 
 ## Backends
 
@@ -111,7 +125,13 @@ See [backends/double/avx2/](backends/double/avx2/) for implementation examples a
 
 Zlib License. See [LICENSE.md](LICENSE.md).
 
+## Authors & Maintainers
+
+- [da-roth](https://github.com/da-roth)
+
 ## Acknowledgments
 
 - [AsmJit](https://github.com/asmjit/asmjit) — Machine code generation
+- [MathPresso](https://github.com/kobalicek/mathpresso) — Mathematical expression JIT compilation inspiration
+- [AutoDiffSharp](https://github.com/naasking/AutoDiffSharp) — Automatic differentiation design influence
 - [SLEEF](https://github.com/shibatch/sleef) — Vectorized math functions
