@@ -39,7 +39,7 @@ Forge is designed for **repeated evaluation** scenarios:
 │+Custom    │     │ │-Simplify │    │ (optional)   │  │         │-Gradients   │
 └───────────┘     │ │-Stability│    │+Custom ISA   │  │         └─────────────┘
                   │ │+Custom   │    └──────────────┘  │
-                  │ └──────────┘ 		      │
+                  │ └──────────┘ 	              │
                   │   	   ForgeEngine                │
                   └───────────────────────────────────┘
 ```
