@@ -30,18 +30,18 @@ Forge is designed for **repeated evaluation** scenarios:
 ## Overview
 
 ```
-  1. Input             2. Graph Pre-processing     3. Kernel Forging          4. Evaluation
+   1. Input          2. Graph Pre-processing    3. Kernel Forging        4. Evaluation
 
-┌────────────┐        ┌─────────────────────────────────────┐        ┌──────────────┐
-│ Graph via: │        │ ┌─────────────┐   ┌──────────────┐ │        │Forged Kernel:│
-│- Direct API│        │ │- CSE        │   │- Forward     │ │        │- Execute     │
-│- Overload  │───────▶│ │- Const Fold │──▶│- Backward    │ │───────▶│- Values      │
-│+ Custom    │        │ │- Simplify   │   │  (optional)  │ │        │- Gradients   │
-└────────────┘        │ │- Stability  │   │+ Custom ISA  │ │        └──────────────┘
-                      │ │+ Custom     │   └──────────────┘ │
-                      │ └─────────────┘                     │
-                      │           ForgeEngine               │
-                      └─────────────────────────────────────┘
+┌────────────┐      ┌────────────────────────────────────┐      ┌──────────────┐
+│ Graph via: │      │ ┌────────────┐   ┌──────────────┐ │      │Forged Kernel:│
+│- Direct API│      │ │- CSE       │   │- Forward     │ │      │- Execute     │
+│- Overload  │─────▶│ │- Const Fold│──▶│- Backward    │ │─────▶│- Values      │
+│+ Custom    │      │ │- Simplify  │   │  (optional)  │ │      │- Gradients   │
+└────────────┘      │ │- Stability │   │+ Custom ISA  │ │      └──────────────┘
+                    │ │+ Custom    │   └──────────────┘ │
+                    │ └────────────┘                    │
+                    │          ForgeEngine              │
+                    └────────────────────────────────────┘
 ```
 
 | Phase | What happens | Extensibility | Reference |
