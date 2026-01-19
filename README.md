@@ -61,6 +61,48 @@ Forge is designed for **repeated evaluation** scenarios:
 
 **Trade-off**: Forge incurs upfront compilation cost. For single evaluations, tape-based AD is faster. Break-even typically occurs after 10–50 evaluations depending on graph complexity.
 
+## How It Works
+
+```mermaid
+flowchart LR
+    subgraph Input["Input Graph"]
+        A1["Operator Overloading"]
+        A2["Direct API"]
+        A3["External (xad-forge)"]
+    end
+
+    subgraph Engine["ForgeEngine"]
+        B["Graph Pre-processing"]
+        C["Forward Forging"]
+        D["Backward Forging"]
+    end
+
+    E["Forged Kernel"]
+
+    A1 --> B
+    A2 --> B
+    A3 --> B
+    B --> C
+    C --> D
+    D --> E
+
+    click A1 "api/native/" "fdouble, fbool, fint - natural math syntax"
+    click A2 "src/graph/graph.hpp" "Programmatic graph construction"
+    click A3 "https://github.com/da-roth/xad-forge" "Example: XAD tape transformation"
+    click B "src/graph/graph_optimizer.hpp" "CSE, constant folding, algebraic simplification"
+    click C "backends/" "IInstructionSet emits forward pass machine code"
+    click D "backends/" "IInstructionSet emits gradient machine code"
+    click E "src/compiler/forge_engine.hpp" "Ready for repeated execution"
+```
+
+| Stage | Description | Extensibility |
+|-------|-------------|---------------|
+| **Input Graph** | Three ways to create graphs | [Operator overloading](api/native/), [Direct API](src/graph/graph.hpp), [External transform](https://github.com/da-roth/xad-forge) |
+| **Graph Pre-processing** | CSE, constant folding, algebraic simplification | [GraphOptimizer](src/graph/graph_optimizer.hpp) |
+| **Forward Forging** | Generates forward pass machine code | [IInstructionSet](backends/), [ICompilationPolicy](src/compiler/interfaces/compilation_policy.hpp) |
+| **Backward Forging** | Generates gradient pass (optional) | Same interfaces as forward |
+| **Forged Kernel** | Executable kernel for repeated evaluation | — |
+
 ## Getting Started
 
 ```bash
