@@ -30,15 +30,15 @@ Forge is designed for **repeated evaluation** scenarios:
 ## Overview
 
 ```
-  1. Input             2. Pre-processing        3. Forging             4. Evaluation
+  1. Input             2. Graph Pre-processing     3. Kernel Forging          4. Evaluation
 
 ┌────────────┐        ┌─────────────────────────────────────┐        ┌──────────────┐
 │ Graph via: │        │ ┌─────────────┐   ┌──────────────┐ │        │Forged Kernel:│
 │- Direct API│        │ │- CSE        │   │- Forward     │ │        │- Execute     │
 │- Overload  │───────▶│ │- Const Fold │──▶│- Backward    │ │───────▶│- Values      │
-│- External  │        │ │- Simplify   │   │  (optional)  │ │        │- Gradients   │
-│+ Custom    │        │ │- Stability  │   │+ Custom ISA  │ │        └──────────────┘
-└────────────┘        │ │+ Custom     │   └──────────────┘ │
+│+ Custom    │        │ │- Simplify   │   │  (optional)  │ │        │- Gradients   │
+└────────────┘        │ │- Stability  │   │+ Custom ISA  │ │        └──────────────┘
+                      │ │+ Custom     │   └──────────────┘ │
                       │ └─────────────┘                     │
                       │           ForgeEngine               │
                       └─────────────────────────────────────┘
@@ -47,8 +47,8 @@ Forge is designed for **repeated evaluation** scenarios:
 | Phase | What happens | Extensibility | Reference |
 |-------|--------------|---------------|-----------|
 | **1. Input** | Build computation graph from expressions | Custom graph transformations | [Graph](src/graph/) |
-| **2. Pre-processing** | Optimize: CSE, constant folding, simplification, stability | Custom optimization passes | [Optimizations](src/graph/optimizations/) |
-| **3. Forging** | Generate forward + (optional) backward machine code | Custom instruction set backends | [Backends](backends/) |
+| **2. Graph Pre-processing** | Optimize: CSE, constant folding, simplification, stability | Custom optimization passes | [Optimizations](src/graph/optimizations/) |
+| **3. Kernel Forging** | Generate forward + (optional) backward machine code | Custom instruction set backends | [Backends](backends/) |
 | **4. Evaluation** | Execute kernel repeatedly with different inputs | — | [Examples](examples/) |
 
 ## Example
