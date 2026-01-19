@@ -25,18 +25,15 @@ class StitchedKernel;
  *
  * == API Design ==
  *
- * Primary API (Lanes): Raw pointer interface for performance-critical code.
- *   - setLanes(nodeId, ptr)           - Set all SIMD lanes from array
- *   - getLanes(nodeId, ptr)           - Get all SIMD lanes to array
- *   - getGradientLanes(indices, ptr)  - Get gradients (interleaved, adapts to vector width)
- *
- * Deprecated API: Convenience wrappers that internally call Lanes methods.
- *   - setValue(nodeId, value)         - Broadcasts to all lanes
+ * Simple API: Single-value interface for ease of use.
+ *   - setValue(nodeId, value)         - Broadcasts to all SIMD lanes
  *   - getValue(nodeId)                - Returns lane 0
  *   - getGradient(nodeId)             - Returns lane 0 gradient
  *
- * The deprecated methods will be removed in a future version.
- * Migrate to the Lanes API for better performance.
+ * Lanes API: Raw pointer interface for performance-critical code.
+ *   - setLanes(nodeId, ptr)           - Set all SIMD lanes from array
+ *   - getLanes(nodeId, ptr)           - Get all SIMD lanes to array
+ *   - getGradientLanes(indices, ptr)  - Get gradients (interleaved, adapts to vector width)
  */
 class INodeValueBuffer {
 public:
@@ -85,28 +82,22 @@ public:
     virtual void getValueLanes(const std::vector<size_t>& bufferIndices, double* output) const = 0;
 
     // ==========================================================================
-    // DEPRECATED API: Convenience wrappers (internally use Lanes)
+    // SIMPLE API: Single-value convenience methods
     // ==========================================================================
 
     /**
-     * @deprecated Use setLanes() for better performance.
      * Set a single value, broadcast to all SIMD lanes.
      */
-    [[deprecated("Use setLanes() for better performance")]]
     virtual void setValue(uint64_t nodeId, double value) = 0;
 
     /**
-     * @deprecated Use getLanes() for better performance.
      * Get a single value (lane 0).
      */
-    [[deprecated("Use getLanes() for better performance")]]
     virtual double getValue(uint64_t nodeId) const = 0;
 
     /**
-     * @deprecated Use getGradientLanes() for better performance.
      * Get gradient for a single node (lane 0).
      */
-    [[deprecated("Use getGradientLanes() for better performance")]]
     virtual double getGradient(forge::NodeId node) const = 0;
 
     // ==========================================================================
@@ -284,7 +275,7 @@ public:
     }
 
     // ==========================================================================
-    // DEPRECATED API: Convenience wrappers (internally use Lanes)
+    // SIMPLE API: Single-value convenience methods
     // ==========================================================================
 
     void setValue(uint64_t nodeId, double value) override {
