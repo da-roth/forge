@@ -26,14 +26,17 @@ Forge compiles mathematical expressions to optimized x86-64 machine code with au
 | **4. Execution** | Run kernel repeatedly with different inputs | [forge_engine.hpp](src/compiler/forge_engine.hpp) |
 
 ```
-                      ┌───────────────────────────────┐
-                      │          ForgeEngine          │
-                      │                               │
-┌─────────┐           │  ┌─────────┐    ┌─────────┐  │           ┌─────────┐
-│ 1.Graph │──────────▶│  │ 2.Optim │───▶│3.Forging│  │──────────▶│4.Execute│
-└─────────┘           │  └─────────┘    └─────────┘  │           └─────────┘
-                      │                               │
-                      └───────────────────────────────┘
+                                        ForgeEngine
+                                ┌──────────────────────────────────────┐
+   1. Graph                     │   2. Optimization     3. Forging     │            4. Execution
+                                │                                      │
+┌──────────────┐                │  ┌───────────────┐   ┌────────────┐  │          ┌──────────────┐
+│ Direct API   │                │  │ CSE           │   │  Forward   │  │          │              │
+│ Overloading  │───────────────▶│  │ Const Folding │──▶│     +      │──│─────────▶│Forged Kernel │
+│ External     │                │  │ Simplify      │   │  Backward  │  │          │              │
+└──────────────┘                │  └───────────────┘   └────────────┘  │          └──────────────┘
+                                │                                      │
+                                └──────────────────────────────────────┘
 ```
 
 ## Example
