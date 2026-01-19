@@ -18,27 +18,23 @@ Forge compiles mathematical expressions to optimized x86-64 machine code with au
 
 ## Overview
 
-Forge processes computations through three phases:
+| Phase | Description | Reference |
+|-------|-------------|-----------|
+| **1. Graph** | Build computation graph | [graph.hpp](src/graph/graph.hpp) |
+| **2. Optimization** | CSE, constant folding, simplification | [graph_optimizer.hpp](src/graph/graph_optimizer.hpp) |
+| **3. Forging** | Generate forward + backward machine code | [backends/](backends/) |
+| **4. Execution** | Run kernel repeatedly with different inputs | [forge_engine.hpp](src/compiler/forge_engine.hpp) |
 
 ```
-                            ┌─────────────────────────────────────────┐
-                            │             ForgeEngine                 │
-                            │                                         │
-┌─────────────┐             │  ┌──────────────┐    ┌──────────────┐  │             ┌─────────────┐
-│             │             │  │              │    │   Forward    │  │             │             │
-│    Graph    │────────────▶│  │ Optimization │───▶│      +       │──│────────────▶│   Forged    │
-│             │             │  │              │    │   Backward   │  │             │   Kernel    │
-└─────────────┘             │  └──────────────┘    └──────────────┘  │             └─────────────┘
-                            │                                         │
-                            └─────────────────────────────────────────┘
+                      ┌───────────────────────────────┐
+                      │          ForgeEngine          │
+                      │                               │
+┌─────────┐           │  ┌─────────┐    ┌─────────┐  │           ┌─────────┐
+│ 1.Graph │──────────▶│  │ 2.Optim │───▶│3.Forging│  │──────────▶│4.Execute│
+└─────────┘           │  └─────────┘    └─────────┘  │           └─────────┘
+                      │                               │
+                      └───────────────────────────────┘
 ```
-
-| Phase | Description | Links |
-|-------|-------------|-------|
-| **Input Graph** | Build computation graph | [Direct API](src/graph/graph.hpp), [Operator overloading](api/native/), [External (xad-forge)](https://github.com/da-roth/xad-forge) |
-| **Optimization** | CSE, constant folding, algebraic simplification | [GraphOptimizer](src/graph/graph_optimizer.hpp) |
-| **Forward + Backward** | Generate machine code via instruction set backends | [Backends](backends/) |
-| **Forged Kernel** | Executable for repeated evaluation | [ForgeEngine](src/compiler/forge_engine.hpp) |
 
 ## Example
 
