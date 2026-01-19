@@ -70,7 +70,7 @@ struct CompilerConfig {
         AVX2_PACKED  // AVX2 256-bit vectors (4 doubles per operation, YMM registers)
         // Contributors can add more instruction sets here without modifying existing code:
         // SSE2_PACKED, // SSE2 packed operations (2 doubles per operation)
-        // AVX512_PACKED, // AVX-512 512-bit vectors (8 doubles per operation, ZMM registers)  
+        // AVX512_PACKED, // AVX-512 512-bit vectors (8 doubles per operation, ZMM registers)
         // NEON,        // ARM NEON vectors
         // To add a new instruction set:
         // 1. Add the enum value here
@@ -78,6 +78,10 @@ struct CompilerConfig {
         // 3. Add case in InstructionSetFactory::create()
     };
     InstructionSet instructionSet = InstructionSet::SSE2_SCALAR;
+
+    // Dynamic instruction set selection (for runtime-loaded backends)
+    std::string instructionSetName;      // Name of dynamically registered instruction set
+    bool useNamedInstructionSet = false; // If true, use instructionSetName instead of enum
 
     /**
      * @brief Load configuration from FORGE_INSTRUCTION_SET environment variable

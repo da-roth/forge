@@ -13,6 +13,7 @@
 #include <graph/graph.hpp>
 #include <compiler/forge_engine.hpp>
 #include <compiler/x86/common/compiler_config.hpp>
+#include <compiler/x86/common/instruction_set_factory.hpp>
 #include <compiler/interfaces/node_value_buffer.hpp>
 
 #include <memory>
@@ -86,6 +87,9 @@ FORGE_API const char* forge_error_string(ForgeError error) {
         case FORGE_ERROR_OUT_OF_MEMORY: return "Out of memory";
         case FORGE_ERROR_INDEX_OUT_OF_RANGE: return "Index out of range";
         case FORGE_ERROR_NOT_COMPILED: return "Not compiled";
+        case FORGE_ERROR_BACKEND_LOAD_FAILED: return "Backend load failed";
+        case FORGE_ERROR_BACKEND_NOT_FOUND: return "Backend not found";
+        case FORGE_ERROR_API_VERSION_MISMATCH: return "API version mismatch";
         default: return "Unknown error";
     }
 }
@@ -652,6 +656,115 @@ FORGE_API void forge_version_numbers(int* major, int* minor, int* patch) {
     if (major) *major = FORGE_VERSION_MAJOR;
     if (minor) *minor = FORGE_VERSION_MINOR;
     if (patch) *patch = FORGE_VERSION_PATCH;
+}
+
+// ==========================================================================
+// Dynamic Backend Loading API
+// ==========================================================================
+
+// Cache for instruction set names (needed for forge_get_instruction_set_name)
+static thread_local std::vector<std::string> g_instruction_set_names;
+
+FORGE_API ForgeError forge_load_backend(const char* library_path) {
+    if (!library_path) {
+        set_error("Null library path");
+        return FORGE_ERROR_INVALID_ARGUMENT;
+    }
+
+    try {
+        forge::InstructionSetFactory::loadBackend(library_path);
+        return FORGE_SUCCESS;
+    } catch (const std::runtime_error& e) {
+        set_error(e.what());
+        // Check if it's a version mismatch error
+        std::string msg = e.what();
+        if (msg.find("API version") != std::string::npos) {
+            return FORGE_ERROR_API_VERSION_MISMATCH;
+        }
+        return FORGE_ERROR_BACKEND_LOAD_FAILED;
+    } catch (...) {
+        set_error("Unknown error loading backend");
+        return FORGE_ERROR_BACKEND_LOAD_FAILED;
+    }
+}
+
+FORGE_API void forge_unload_all_backends(void) {
+    forge::InstructionSetFactory::unloadAllBackends();
+}
+
+FORGE_API int forge_has_instruction_set(const char* name) {
+    if (!name) return 0;
+
+    // Check built-in names first
+    if (strcmp(name, "SSE2-Scalar") == 0 || strcmp(name, "AVX2-Packed") == 0) {
+        return 1;
+    }
+
+    // Check dynamically registered
+    return forge::InstructionSetFactory::hasInstructionSet(name) ? 1 : 0;
+}
+
+FORGE_API size_t forge_get_instruction_set_count(void) {
+    auto names = forge::InstructionSetFactory::getAvailableInstructionSets();
+    // Add AVX2-Packed which might not be in the dynamic registry
+    bool hasAvx2 = false;
+    for (const auto& n : names) {
+        if (n == "AVX2-Packed") hasAvx2 = true;
+    }
+    return names.size() + (hasAvx2 ? 0 : 1);
+}
+
+FORGE_API const char* forge_get_instruction_set_name(size_t index) {
+    // Refresh the cache
+    g_instruction_set_names = forge::InstructionSetFactory::getAvailableInstructionSets();
+
+    // Add AVX2-Packed if not present
+    bool hasAvx2 = false;
+    for (const auto& n : g_instruction_set_names) {
+        if (n == "AVX2-Packed") hasAvx2 = true;
+    }
+    if (!hasAvx2) {
+        g_instruction_set_names.push_back("AVX2-Packed");
+    }
+
+    if (index >= g_instruction_set_names.size()) {
+        return nullptr;
+    }
+    return g_instruction_set_names[index].c_str();
+}
+
+FORGE_API ForgeError forge_config_set_instruction_set_by_name(ForgeConfigHandle config, const char* name) {
+    if (!config) {
+        set_error("Null config handle");
+        return FORGE_ERROR_NULL_HANDLE;
+    }
+    if (!name) {
+        set_error("Null name");
+        return FORGE_ERROR_INVALID_ARGUMENT;
+    }
+
+    // Handle built-in instruction sets
+    if (strcmp(name, "SSE2-Scalar") == 0) {
+        config->config.instructionSet = forge::CompilerConfig::InstructionSet::SSE2_SCALAR;
+        return FORGE_SUCCESS;
+    }
+    if (strcmp(name, "AVX2-Packed") == 0) {
+        config->config.instructionSet = forge::CompilerConfig::InstructionSet::AVX2_PACKED;
+        return FORGE_SUCCESS;
+    }
+
+    // Check if it's a dynamically registered instruction set
+    if (forge::InstructionSetFactory::hasInstructionSet(name)) {
+        // Store the name in the config for later use during compilation
+        // We need to extend CompilerConfig to support string-based instruction set
+        // For now, we store it and the compile function will handle it
+        config->config.instructionSetName = name;
+        config->config.useNamedInstructionSet = true;
+        return FORGE_SUCCESS;
+    }
+
+    set_error(std::string("Instruction set not found: ") + name);
+    return FORGE_ERROR_BACKEND_NOT_FOUND;
 }
 
 } // extern "C"

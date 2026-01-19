@@ -76,6 +76,9 @@ typedef enum ForgeError {
     FORGE_ERROR_OUT_OF_MEMORY = -4,
     FORGE_ERROR_INDEX_OUT_OF_RANGE = -5,
     FORGE_ERROR_NOT_COMPILED = -6,
+    FORGE_ERROR_BACKEND_LOAD_FAILED = -7,
+    FORGE_ERROR_BACKEND_NOT_FOUND = -8,
+    FORGE_ERROR_API_VERSION_MISMATCH = -9,
     FORGE_ERROR_UNKNOWN = -99
 } ForgeError;
 
@@ -436,6 +439,68 @@ FORGE_API const char* forge_version(void);
  * Get the Forge library version as integers.
  */
 FORGE_API void forge_version_numbers(int* major, int* minor, int* patch);
+
+/* ==========================================================================
+ * Dynamic Backend Loading API
+ * ========================================================================== */
+
+/**
+ * Load a custom backend from a shared library.
+ *
+ * The library must export a C function:
+ *     extern "C" void forge_register_backend();
+ *
+ * This function should call forge::InstructionSetFactory::registerInstructionSet()
+ * to register the custom instruction set(s).
+ *
+ * @param library_path Path to the shared library (.so on Linux, .dll on Windows)
+ * @return FORGE_SUCCESS on success, error code on failure
+ *
+ * Example:
+ *   forge_load_backend("./libforge_avx512.so");
+ *   forge_config_set_instruction_set_by_name(config, "AVX512-Custom");
+ */
+FORGE_API ForgeError forge_load_backend(const char* library_path);
+
+/**
+ * Unload all dynamically loaded backends.
+ *
+ * Clears the registry and unloads shared libraries.
+ * Ensure no instruction sets from loaded backends are in use before calling.
+ */
+FORGE_API void forge_unload_all_backends(void);
+
+/**
+ * Check if an instruction set is available (built-in or dynamically loaded).
+ *
+ * @param name Name of the instruction set (e.g., "AVX512-Custom")
+ * @return 1 if available, 0 if not
+ */
+FORGE_API int forge_has_instruction_set(const char* name);
+
+/**
+ * Get the number of available instruction sets.
+ */
+FORGE_API size_t forge_get_instruction_set_count(void);
+
+/**
+ * Get the name of an instruction set by index.
+ *
+ * @param index Index (0 to forge_get_instruction_set_count() - 1)
+ * @return Name string, or NULL if index out of range
+ */
+FORGE_API const char* forge_get_instruction_set_name(size_t index);
+
+/**
+ * Set the instruction set by name string.
+ *
+ * Use this for dynamically loaded backends instead of the enum-based version.
+ *
+ * @param config Configuration handle
+ * @param name Instruction set name (e.g., "SSE2-Scalar", "AVX2-Packed", "AVX512-Custom")
+ * @return FORGE_SUCCESS on success, FORGE_ERROR_BACKEND_NOT_FOUND if name not found
+ */
+FORGE_API ForgeError forge_config_set_instruction_set_by_name(ForgeConfigHandle config, const char* name);
 
 #ifdef __cplusplus
 }

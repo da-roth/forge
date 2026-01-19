@@ -22,6 +22,7 @@
 #include "x86/common/compiler_config.hpp"
 #include "forge_engine.hpp"
 #include "interfaces/instruction_set.hpp"
+#include "interfaces/compilation_policy.hpp"
 #include <asmjit/x86.h>
 #include <unordered_map>
 
@@ -52,6 +53,7 @@ public:
      * @param constPoolLabel Label for constant pool in generated code
      * @param regState Register allocator state
      * @param instructionSet Instruction set implementation (SSE2/AVX2)
+     * @param policy Compilation policy for register decisions (nullptr for default)
      * @param deferStore If true, keep result in register without storing
      *
      * Thread Safety: Not thread-safe
@@ -65,6 +67,7 @@ public:
         const asmjit::Label& constPoolLabel,
         IRegisterAllocator& regState,
         IInstructionSet* instructionSet,
+        ICompilationPolicy* policy = nullptr,
         bool deferStore = false
     );
 
@@ -122,6 +125,7 @@ private:
         const asmjit::Label& constPoolLabel,
         std::unordered_set<forge::NodeId>& processedConstants,
         IInstructionSet* instructionSet,
+        ICompilationPolicy* policy,
         std::initializer_list<int> avoid
     );
 };

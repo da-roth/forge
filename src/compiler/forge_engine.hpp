@@ -24,6 +24,7 @@
 #include "../graph/graph_optimizer.hpp"
 #include "x86/common/compiler_config.hpp"
 #include "interfaces/instruction_set.hpp"
+#include "interfaces/compilation_policy.hpp"
 #include "x86/common/instruction_set_factory.hpp"
 #include "runtime_trace.hpp"
 #include <asmjit/x86.h>
@@ -108,6 +109,24 @@ public:
     void setConfig(const CompilerConfig& config) { config_ = config; }
 
     /**
+     * @brief Set custom compilation policy
+     *
+     * Policies control register allocation and memory management decisions
+     * during compilation. The default policy preserves standard behavior.
+     *
+     * @param policy Custom policy (ownership transferred)
+     */
+    void setPolicy(std::unique_ptr<ICompilationPolicy> policy) {
+        policy_ = std::move(policy);
+    }
+
+    /**
+     * @brief Get current compilation policy
+     * @return Pointer to active policy
+     */
+    ICompilationPolicy* getPolicy() const { return policy_.get(); }
+
+    /**
      * @brief Get the shared JIT runtime (for testing/debugging)
      * @return Reference to global JitRuntime instance
      */
@@ -122,9 +141,12 @@ public:
 private:
     // Compiler configuration
     CompilerConfig config_;
-    
+
     // Instruction set implementation (based on config)
     std::unique_ptr<IInstructionSet> instructionSet_;
+
+    // Compilation policy for register allocation and store decisions
+    std::unique_ptr<ICompilationPolicy> policy_;
     
     // Shared JitRuntime for all compilers - long-lived per Design v3
     // This ensures executable memory remains valid after compiler destruction

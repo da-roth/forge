@@ -35,11 +35,21 @@ asmjit::JitRuntime ForgeEngine::s_runtime;
 ForgeEngine::ForgeEngine() : config_(CompilerConfig::Default()) {
     // Create instruction set based on config - MUST pass the full config!
     instructionSet_ = InstructionSetFactory::create(config_.instructionSet, config_);
+    // Initialize with default policy
+    policy_ = std::make_unique<DefaultCompilationPolicy>();
 }
 
 ForgeEngine::ForgeEngine(const CompilerConfig& config) : config_(config) {
-    // Create instruction set based on config - MUST pass the full config!
-    instructionSet_ = InstructionSetFactory::create(config_.instructionSet, config_);
+    // Create instruction set based on config
+    if (config_.useNamedInstructionSet && !config_.instructionSetName.empty()) {
+        // Use dynamically registered instruction set by name
+        instructionSet_ = InstructionSetFactory::createByName(config_.instructionSetName, config_);
+    } else {
+        // Use enum-based selection (built-in instruction sets)
+        instructionSet_ = InstructionSetFactory::create(config_.instructionSet, config_);
+    }
+    // Initialize with default policy
+    policy_ = std::make_unique<DefaultCompilationPolicy>();
 }
 
 ForgeEngine::~ForgeEngine() = default;
@@ -49,7 +59,17 @@ asmjit::JitRuntime& ForgeEngine::getRuntime() {
 }
 
 std::unique_ptr<IRegisterAllocator> ForgeEngine::createRegisterAllocator() const {
-    // Create appropriate allocator based on instruction set
+    // For dynamically loaded backends, use vector width to determine allocator
+    if (config_.useNamedInstructionSet && instructionSet_) {
+        int vectorWidth = instructionSet_->getVectorWidth();
+        if (vectorWidth >= 4) {
+            return std::make_unique<YmmRegisterAllocator>();
+        } else {
+            return std::make_unique<XmmRegisterAllocator>();
+        }
+    }
+
+    // Create appropriate allocator based on instruction set enum
     switch (config_.instructionSet) {
         case CompilerConfig::InstructionSet::AVX2_PACKED:
             return std::make_unique<YmmRegisterAllocator>();
@@ -443,25 +463,41 @@ std::unique_ptr<StitchedKernel> ForgeEngine::compile(const Graph& graph) {
     auto codeGenStart = Clock::now();
     int nodesProcessed = 0;
 
+    // Notify policy that compilation is beginning
+    policy_->onCompileBegin(workingGraph, a);
+
     for (NodeId nodeId = 0; nodeId < workingGraph.nodes.size(); ++nodeId) {
         const Node& node = workingGraph.nodes[nodeId];
         if (node.isDead) continue;  // Skip dead nodes from optimization
+
+        // Notify policy before node processing
+        policy_->onNodeBegin(nodeId, a);
 
         // Track operation type timing
         auto opStart = Clock::now();
         std::string opName = getOpName(node.op);
 
+        // Get store decision from policy (inverted: requiresStore=true means deferStore=false)
+        bool deferStore = !policy_->requiresStore(nodeId, workingGraph);
+
         // Generate forward operation code
-        ForwardStitcher::generateForwardOperation(a, node, nodeId, workingGraph, constantMap, constPoolLabel, regState, instructionSet_.get(), false);
+        ForwardStitcher::generateForwardOperation(a, node, nodeId, workingGraph, constantMap, constPoolLabel, regState, instructionSet_.get(), policy_.get(), deferStore);
 
         // Track maximum node ID
         maxNodeIdAccessed = std::max(maxNodeIdAccessed, nodeId);
+
+        // Notify policy after node processing
+        int resultReg = regState.findNodeInRegister(nodeId);
+        policy_->onNodeEnd(nodeId, resultReg, a);
 
         double opTime = Duration(Clock::now() - opStart).count();
         opTypeTime[opName] += opTime;
         opTypeCounts[opName]++;
         nodesProcessed++;
     }
+
+    // Notify policy that compilation is ending
+    policy_->onCompileEnd(a);
     
     // Generate function epilogue
     codeGenerationTime = Duration(Clock::now() - codeGenStart).count();
