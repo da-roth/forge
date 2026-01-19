@@ -194,27 +194,25 @@ if(FORGE_BUNDLE_AVX2)
 endif()
 
 # -----------------------------------------------------------------------------
-# forge_x86_common: x86 common code, register allocator, buffer factory (no SIMD)
+# forge_x86_common: x86 common code, register allocator (no SIMD)
 # -----------------------------------------------------------------------------
 add_library(forge_x86_common OBJECT
     src/compiler/x86/common/x86_instruction_set_base.cpp
-    src/compiler/x86/common/node_value_buffer_factory.cpp
 )
 target_include_directories(forge_x86_common PUBLIC ${FORGE_INCLUDE_DIRS})
 target_compile_options(forge_x86_common PRIVATE ${FORGE_BASE_COMPILE_OPTIONS})
 target_link_libraries(forge_x86_common PUBLIC asmjit)
-if(FORGE_BUNDLE_AVX2)
-    target_compile_definitions(forge_x86_common PRIVATE FORGE_BUNDLE_AVX2)
-endif()
 
 # -----------------------------------------------------------------------------
 # forge_x86_double_avx2: AVX2 instruction set implementation (-mavx2)
+# Note: node_value_buffer_factory.cpp is here because it includes AVX2 buffer headers
 # Only built when FORGE_BUNDLE_AVX2 is ON
 # -----------------------------------------------------------------------------
 if(FORGE_BUNDLE_AVX2)
     add_library(forge_x86_double_avx2 OBJECT
         backends/double/avx2/avx2_instruction_set.cpp
         backends/double/avx2/avx2_static_registration.cpp
+        src/compiler/x86/common/node_value_buffer_factory.cpp
     )
     target_include_directories(forge_x86_double_avx2 PUBLIC ${FORGE_INCLUDE_DIRS})
     target_compile_options(forge_x86_double_avx2 PRIVATE ${FORGE_AVX2_COMPILE_OPTIONS})

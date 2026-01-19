@@ -153,8 +153,7 @@ typedef enum ForgeOpCode {
 
 typedef enum ForgeInstructionSet {
     FORGE_INSTRUCTION_SET_SSE2_SCALAR = 0,
-    FORGE_INSTRUCTION_SET_AVX2_PACKED = 1,
-    FORGE_INSTRUCTION_SET_AUTO = 2  /* Automatically select best available */
+    FORGE_INSTRUCTION_SET_AVX2_PACKED = 1
 } ForgeInstructionSet;
 
 /* ==========================================================================

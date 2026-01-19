@@ -67,8 +67,7 @@ struct CompilerConfig {
     // Instruction set selection (extensible for future additions)
     enum class InstructionSet {
         SSE2_SCALAR, // Current default: SSE2 scalar double-precision operations (1 double per operation)
-        AVX2_PACKED, // AVX2 256-bit vectors (4 doubles per operation, YMM registers)
-        AUTO         // Automatically select best available instruction set based on CPU features
+        AVX2_PACKED  // AVX2 256-bit vectors (4 doubles per operation, YMM registers)
         // Contributors can add more instruction sets here without modifying existing code:
         // SSE2_PACKED, // SSE2 packed operations (2 doubles per operation)
         // AVX512_PACKED, // AVX-512 512-bit vectors (8 doubles per operation, ZMM registers)
@@ -97,7 +96,6 @@ struct CompilerConfig {
             std::string val(env);
             if (val == "SSE2-Scalar" || val == "SSE2") instructionSet = InstructionSet::SSE2_SCALAR;
             else if (val == "AVX2-Packed" || val == "AVX2") instructionSet = InstructionSet::AVX2_PACKED;
-            else if (val == "AUTO" || val == "auto") instructionSet = InstructionSet::AUTO;
             // Add more as they're implemented:
             // else if (val == "SSE2-Packed") instructionSet = InstructionSet::SSE2_PACKED;
             // else if (val == "AVX512-Packed") instructionSet = InstructionSet::AVX512_PACKED;

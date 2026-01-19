@@ -393,9 +393,6 @@ FORGE_API ForgeError forge_config_set_instruction_set(ForgeConfigHandle config, 
         case FORGE_INSTRUCTION_SET_AVX2_PACKED:
             config->config.instructionSet = forge::CompilerConfig::InstructionSet::AVX2_PACKED;
             break;
-        case FORGE_INSTRUCTION_SET_AUTO:
-            config->config.instructionSet = forge::CompilerConfig::InstructionSet::AUTO;
-            break;
         default:
             set_error("Invalid instruction set");
             return FORGE_ERROR_INVALID_ARGUMENT;
