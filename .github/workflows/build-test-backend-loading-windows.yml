@@ -1,0 +1,135 @@
+name: Build & Test Backend Loading (Windows)
+
+on:
+  push:
+    branches: [ main, develop, 'v*' ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+jobs:
+  # Test 1: SSE2-only build (no AVX2 bundled, no AVX2 backend)
+  test-sse2-only:
+    name: SSE2-only Build
+    runs-on: windows-latest
+
+    strategy:
+      matrix:
+        build_type: [Release, Debug]
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Setup MSVC
+      uses: microsoft/setup-msbuild@v2
+
+    - name: Install Ninja
+      run: choco install ninja -y
+
+    - name: Setup MSVC environment
+      uses: ilammy/msvc-dev-cmd@v1
+      with:
+        arch: x64
+
+    - name: Configure CMake (SSE2-only, no AVX2)
+      run: |
+        cmake -B build -S . `
+          -G Ninja `
+          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} `
+          -DFORGE_USE_STATIC_RUNTIME=ON `
+          -DFORGE_BUNDLE_AVX2=OFF
+
+    - name: Build Forge library (SSE2-only)
+      run: cmake --build build --target forge
+
+    - name: Build Core tests
+      run: cmake --build build --target forge_tests
+
+    - name: Run Core tests (SSE2-only)
+      run: |
+        cd build
+        ctest -L Unit --output-on-failure --timeout 120
+      env:
+        CTEST_OUTPUT_ON_FAILURE: 1
+
+    - name: Upload test results on failure
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-results-sse2-only-windows-${{ matrix.build_type }}
+        path: |
+          build/Testing/
+          build/bin/*.log
+        retention-days: 7
+
+  # Test 2: Runtime loading of AVX2 backend
+  test-runtime-loading:
+    name: Runtime AVX2 Loading
+    runs-on: windows-latest
+
+    strategy:
+      matrix:
+        build_type: [Release, Debug]
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Setup MSVC
+      uses: microsoft/setup-msbuild@v2
+
+    - name: Install Ninja
+      run: choco install ninja -y
+
+    - name: Setup MSVC environment
+      uses: ilammy/msvc-dev-cmd@v1
+      with:
+        arch: x64
+
+    - name: Configure CMake (unbundled AVX2 + build backend)
+      run: |
+        cmake -B build -S . `
+          -G Ninja `
+          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} `
+          -DFORGE_USE_STATIC_RUNTIME=ON `
+          -DFORGE_BUNDLE_AVX2=OFF `
+          -DFORGE_BUILD_AVX2_BACKEND=ON
+
+    - name: Build Forge library (without bundled AVX2)
+      run: cmake --build build --target forge
+
+    - name: Build AVX2 backend shared library
+      run: cmake --build build --target forge_avx2
+
+    - name: Build Core tests
+      run: cmake --build build --target forge_tests
+
+    - name: Verify AVX2 backend exists
+      run: |
+        Write-Host "Looking for AVX2 backend library..."
+        Get-ChildItem -Path build -Recurse -Filter "*forge_avx2*" | Select-Object FullName
+        Get-ChildItem -Path build | Format-Table Name
+
+    - name: Run Core tests with runtime-loaded AVX2
+      run: |
+        cd build
+        ctest -L Unit --output-on-failure --timeout 120
+      env:
+        CTEST_OUTPUT_ON_FAILURE: 1
+        FORGE_AVX2_BACKEND_PATH: ./forge_avx2.dll
+
+    - name: Upload test results on failure
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-results-runtime-loading-windows-${{ matrix.build_type }}
+        path: |
+          build/Testing/
+          build/bin/*.log
+          build/*.dll
+        retention-days: 7

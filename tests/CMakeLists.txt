@@ -7,6 +7,7 @@ add_executable(forge_tests
     test_forge_engine_unit.cpp
     test_runtime_tracer.cpp
     test_debug_helpers.cpp
+    test_backend_loading.cpp
 )
 
 # Link with Google Test and our library
