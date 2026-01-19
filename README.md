@@ -32,40 +32,27 @@ Forge is designed for **repeated evaluation** scenarios:
 <table>
 <tr>
   <th>Phase</th>
-  <th>What happens</th>
-  <th>Details</th>
-  <th>Extensibility</th>
-  <th>Reference</th>
+  <th>Description</th>
 </tr>
 <tr>
-  <td><b>1. Input</b></td>
-  <td>Build computation graph</td>
-  <td>Direct API, Overloading</td>
-  <td>+ Custom transformations</td>
-  <td><a href="src/graph/">Graph</a></td>
+  <td><a href="src/graph/"><b>1. Graph Construction</b></a></td>
+  <td>Build computation graph via Direct API or operator overloading</td>
 </tr>
 <tr>
-  <td><b>2. Pre-processing</b></td>
-  <td>Optimize graph (ForgeEngine)</td>
-  <td>CSE, Const Fold, Simplify, Stability</td>
-  <td>+ Custom passes</td>
-  <td><a href="src/graph/optimizations/">Optimizations</a></td>
+  <td><a href="src/graph/optimizations/"><b>2. Graph Optimization</b></a></td>
+  <td>ForgeEngine optimizes: CSE, constant folding, simplification, stability cleaning</td>
 </tr>
 <tr>
-  <td><b>3. Kernel Forging</b></td>
-  <td>Generate machine code (ForgeEngine)</td>
-  <td>Forward, Backward (optional)</td>
-  <td>+ Custom ISA backends</td>
-  <td><a href="backends/">Backends</a></td>
+  <td><a href="backends/"><b>3. Kernel Forging</b></a></td>
+  <td>ForgeEngine generates forward pass + optional backward pass machine code</td>
 </tr>
 <tr>
-  <td><b>4. Evaluation</b></td>
-  <td>Run compiled kernel</td>
-  <td>Execute, Values, Gradients</td>
-  <td>—</td>
-  <td><a href="examples/">Examples</a></td>
+  <td><a href="examples/"><b>4. Execution</b></a></td>
+  <td>Run compiled kernel repeatedly with different inputs, retrieve values and gradients</td>
 </tr>
 </table>
+
+<sub>Extensibility: Custom graph transformations (1), custom optimization passes (2), custom instruction set backends (3)</sub>
 
 ## Example
 
