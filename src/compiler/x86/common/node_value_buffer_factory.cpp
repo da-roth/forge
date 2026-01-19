@@ -1,28 +1,25 @@
 #include "../../interfaces/node_value_buffer.hpp"
 #include "../double/scalar/scalar_node_value_buffer.hpp"
 #include "../../forge_engine.hpp"
+#include <unordered_map>
 
 namespace forge {
 
-// Registry for buffer creators (allows AVX2 to register without header dependency)
+// Registry for buffer creators by vector width
 namespace {
-    // Function signature for creating buffers
-    using BufferCreatorFunc = std::unique_ptr<INodeValueBuffer>(*)(
-        const forge::Graph& optimizedTape,
-        const std::vector<forge::NodeId>& mapping,
-        size_t requiredNodes);
-
-    // Registry of buffer creators by vector width
-    BufferCreatorFunc g_avx2BufferCreator = nullptr;
+    std::unordered_map<int, NodeValueBufferFactory::BufferCreatorFunc>& getBufferCreatorRegistry() {
+        static std::unordered_map<int, NodeValueBufferFactory::BufferCreatorFunc> registry;
+        return registry;
+    }
 }
 
-// Called by AVX2 static registration to register the AVX2 buffer creator
-void NodeValueBufferFactory::registerAVX2BufferCreator(
-    std::unique_ptr<INodeValueBuffer>(*creator)(
-        const forge::Graph&,
-        const std::vector<forge::NodeId>&,
-        size_t)) {
-    g_avx2BufferCreator = creator;
+void NodeValueBufferFactory::registerBufferCreator(int vectorWidth, BufferCreatorFunc creator) {
+    getBufferCreatorRegistry()[vectorWidth] = creator;
+}
+
+bool NodeValueBufferFactory::hasBufferCreator(int vectorWidth) {
+    auto& registry = getBufferCreatorRegistry();
+    return registry.find(vectorWidth) != registry.end();
 }
 
 std::unique_ptr<INodeValueBuffer> NodeValueBufferFactory::create(
@@ -54,17 +51,21 @@ std::unique_ptr<INodeValueBuffer> NodeValueBufferFactory::create(
         }
     }
 
+    // Scalar (vectorWidth == 1) is always available
     if (vectorWidth == 1) {
         return std::make_unique<ScalarNodeValueBuffer>(optimizedTape, mapping);
-    } else if (vectorWidth == 4) {
-        if (g_avx2BufferCreator) {
-            return g_avx2BufferCreator(optimizedTape, mapping, requiredNodes);
-        }
-        throw std::runtime_error("AVX2 buffer creator not registered. "
-                                 "Bundle AVX2 or load AVX2 backend at runtime first.");
-    } else {
-        throw std::runtime_error("Unsupported vector width: " + std::to_string(vectorWidth));
     }
+
+    // Look up registered buffer creator for this vector width
+    auto& registry = getBufferCreatorRegistry();
+    auto it = registry.find(vectorWidth);
+    if (it != registry.end() && it->second != nullptr) {
+        return it->second(optimizedTape, mapping, requiredNodes);
+    }
+
+    throw std::runtime_error(
+        "No buffer creator registered for vector width " + std::to_string(vectorWidth) +
+        ". Ensure the appropriate backend is bundled or loaded at runtime.");
 }
 
 } // namespace forge

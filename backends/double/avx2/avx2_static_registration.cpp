@@ -33,10 +33,10 @@ std::unique_ptr<forge::INodeValueBuffer> createAVX2Buffer(
     return std::make_unique<forge::AVX2NodeValueBuffer>(optimizedTape, mapping, requiredNodes);
 }
 
-// Static registration of AVX2 buffer creator
+// Static registration of AVX2 buffer creator (vector width 4)
 struct AVX2BufferRegistrar {
     AVX2BufferRegistrar() {
-        forge::NodeValueBufferFactory::registerAVX2BufferCreator(createAVX2Buffer);
+        forge::NodeValueBufferFactory::registerBufferCreator(4, createAVX2Buffer);
     }
 };
 static AVX2BufferRegistrar s_avx2BufferRegistrar;

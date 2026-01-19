@@ -389,28 +389,37 @@ protected:
 
 /**
  * Factory for creating appropriate NodeValueBuffer based on kernel requirements.
- * Uses a registration pattern so AVX2 can register its buffer creator without
- * requiring the factory to include AVX2 headers directly.
+ * Uses a registration pattern so SIMD backends can register their buffer creators
+ * without requiring the factory to include backend-specific headers directly.
  */
 class NodeValueBufferFactory {
 public:
+    /** Function signature for buffer creators */
+    using BufferCreatorFunc = std::unique_ptr<INodeValueBuffer>(*)(
+        const forge::Graph& optimizedTape,
+        const std::vector<forge::NodeId>& mapping,
+        size_t requiredNodes);
+
     /**
      * Create a buffer appropriate for the kernel's vector width.
-     * For vectorWidth==4, requires AVX2 buffer creator to be registered.
+     * For vectorWidth > 1, requires a buffer creator to be registered for that width.
      */
     static std::unique_ptr<INodeValueBuffer> create(
         const forge::Graph& tape,
         const StitchedKernel& kernel);
 
     /**
-     * Register the AVX2 buffer creator function.
-     * Called by AVX2 static initialization when AVX2 is bundled.
+     * Register a buffer creator for a specific vector width.
+     * Called by backend static initialization when bundled, or when loaded at runtime.
+     * @param vectorWidth The SIMD vector width (e.g., 4 for AVX2, 8 for AVX-512)
+     * @param creator Function that creates buffers for this vector width
      */
-    static void registerAVX2BufferCreator(
-        std::unique_ptr<INodeValueBuffer>(*creator)(
-            const forge::Graph& optimizedTape,
-            const std::vector<forge::NodeId>& mapping,
-            size_t requiredNodes));
+    static void registerBufferCreator(int vectorWidth, BufferCreatorFunc creator);
+
+    /**
+     * Check if a buffer creator is registered for a vector width.
+     */
+    static bool hasBufferCreator(int vectorWidth);
 };
 
 } // namespace forge

@@ -58,8 +58,8 @@ void forge_register_backend() {
         []() { return std::make_unique<forge::AVX2InstructionSet>(); }
     );
 
-    // Register buffer creator
-    forge::NodeValueBufferFactory::registerAVX2BufferCreator(createAVX2Buffer);
+    // Register buffer creator (vector width 4)
+    forge::NodeValueBufferFactory::registerBufferCreator(4, createAVX2Buffer);
 }
 
 } // extern "C"
