@@ -106,14 +106,19 @@ Requires C++17 and CMake 3.20+. All dependencies are fetched automatically.
 
 ## License
 
-Zlib License. See [LICENSE.md](LICENSE.md).
+FORGE is licensed under the Zlib License. See [LICENSE.md](LICENSE.md) for details.
 
 ## Related Projects
 
 - [xad-forge](https://github.com/da-roth/xad-forge) — Forge JIT backend for [XAD](https://github.com/auto-differentiation/xad)
 
+## Authors & Maintainers
+
+- [da-roth](https://github.com/da-roth)
+
 ## Acknowledgments
 
-- [AsmJit](https://github.com/asmjit/asmjit) — Machine code generation
-- [MathPresso](https://github.com/kobalicek/mathpresso) — JIT expression compilation inspiration
-- [SLEEF](https://github.com/shibatch/sleef) — Vectorized transcendental functions
+- [AsmJit](https://github.com/asmjit/asmjit) — High-performance machine code generation
+- [MathPresso](https://github.com/kobalicek/mathpresso) — Mathematical expression JIT compilation inspiration
+- [AutoDiffSharp](https://github.com/naasking/AutoDiffSharp) — Automatic differentiation design influence
+- [SLEEF](https://github.com/shibatch/sleef) — Vectorized math functions for SIMD operations
