@@ -16,6 +16,17 @@ Forge compiles mathematical expressions to optimized x86-64 machine code with au
 - **SIMD Backends**: SSE2 scalar (default) and AVX2 packed (4-wide), with extensible backend interface
 - **Branching Support**: Record-time conditional evaluation via `fbool` and `If()` for data-dependent control flow
 
+## When to Use Forge
+
+Forge is designed for **repeated evaluation** scenarios:
+
+- **Monte Carlo methods**: Pricing, XVA, path-dependent calculations
+- **Scenario analysis**: Stress testing, what-if analysis, parameter sweeps
+- **Sensitivities**: Fast gradient computation across input variations
+- **Model calibration**: Repeated function/gradient evaluation during optimization
+
+**Trade-off**: Forge incurs upfront compilation cost. For single evaluations, tape-based AD is faster. Break-even typically occurs after 10–50 evaluations depending on graph complexity.
+
 ## Overview
 
 ```
@@ -35,7 +46,7 @@ Forge compiles mathematical expressions to optimized x86-64 machine code with au
 
 | Phase | What happens | Extensibility | Reference |
 |-------|--------------|---------------|-----------|
-| **1. Input** | Build computation graph from expressions | Custom graph transformations | [Graph API](src/graph/) |
+| **1. Input** | Build computation graph from expressions | Custom graph transformations | [Direct API](src/graph/), [Overloading](api/native/) |
 | **2. Pre-processing** | Optimize graph: CSE, constant folding, algebraic simplification, stability cleaning | Custom optimization passes | [Optimizations](src/graph/optimizations/) |
 | **3. Forging** | Generate native machine code for forward pass and (optional) backward pass | Custom instruction set backends | [Backends](backends/) |
 | **4. Evaluation** | Execute compiled kernel repeatedly with different inputs | — | [Examples](examples/) |
@@ -74,17 +85,6 @@ int main() {
 }
 ```
 
-## When to Use Forge
-
-Forge is designed for **repeated evaluation** scenarios:
-
-- **Monte Carlo methods**: Pricing, XVA, path-dependent calculations
-- **Scenario analysis**: Stress testing, what-if analysis, parameter sweeps
-- **Sensitivities**: Fast gradient computation across input variations
-- **Model calibration**: Repeated function/gradient evaluation during optimization
-
-**Trade-off**: Forge incurs upfront compilation cost. For single evaluations, tape-based AD is faster. Break-even typically occurs after 10–50 evaluations depending on graph complexity.
-
 ## Getting Started
 
 ```bash
@@ -100,15 +100,6 @@ target_link_libraries(your_target PRIVATE forge::forge)
 ```
 
 Requires C++17 and CMake 3.20+. All dependencies are fetched automatically.
-
-## Documentation
-
-| Resource | Description |
-|----------|-------------|
-| [examples/](examples/) | Working demonstrations |
-| [api/native/](api/native/) | `fdouble`, `fbool`, `fint` operator overloading API |
-| [src/graph/graph.hpp](src/graph/graph.hpp) | Direct Graph API and `OpCode` definitions |
-| [backends/](backends/) | Backend implementation reference |
 
 ## SIMD Backends
 
