@@ -31,6 +31,21 @@ Forge is designed for **repeated evaluation** scenarios:
 
 **Trade-off**: Forge incurs upfront compilation cost. For single evaluations, tape-based AD is faster. Break-even typically occurs after 10–50 evaluations depending on graph complexity.
 
+### Performance
+
+In a [LIBOR swaption benchmark](docs/benchmarks.md) computing 161 sensitivities across varying Monte Carlo path counts:
+
+| Paths | XAD (tape) | Forge JIT | Forge JIT + AVX2 |
+|------:|-------:|-------:|-------:|
+| 100 | **15ms** | 35ms | 33ms |
+| 1K | 143ms | 126ms | **67ms** |
+| 10K | 1.4s | 1.0s | **0.4s** |
+| 100K | 14.3s | 9.9s | **3.5s** |
+
+At low path counts, tape-based AD is faster. Beyond ~1,000 evaluations, JIT compilation amortizes and Forge pulls ahead — with AVX2 SIMD providing an additional 2-4x speedup. See [benchmarks](docs/benchmarks.md) for full methodology and results.
+
+For detailed guidance on when to use JIT vs tape-based AD, see [xad-forge's usage guide](https://github.com/da-roth/xad-forge#when-to-use-jit).
+
 ## Overview
 
 <table>
@@ -115,6 +130,7 @@ FORGE is licensed under the Zlib License. See [LICENSE.md](LICENSE.md) for detai
 ## Related Projects
 
 - [xad-forge](https://github.com/da-roth/xad-forge) — Forge JIT backend for [XAD](https://github.com/auto-differentiation/xad)
+- [QuantLib-Risks-Cpp-Forge](https://github.com/da-roth/QuantLib-Risks-Cpp-Forge) — [QuantLib-Risks](https://github.com/auto-differentiation/QuantLib-Risks-Cpp) with Forge JIT integration
 
 ## Authors & Maintainers
 
