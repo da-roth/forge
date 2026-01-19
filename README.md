@@ -20,23 +20,21 @@ Forge compiles mathematical expressions to optimized x86-64 machine code with au
 
 | Phase | Description | Reference |
 |-------|-------------|-----------|
-| **1. Graph** | Build computation graph | [graph.hpp](src/graph/graph.hpp) |
-| **2. Optimization** | CSE, constant folding, simplification | [graph_optimizer.hpp](src/graph/graph_optimizer.hpp) |
-| **3. Forging** | Generate forward + backward machine code | [backends/](backends/) |
-| **4. Execution** | Run kernel repeatedly with different inputs | [forge_engine.hpp](src/compiler/forge_engine.hpp) |
+| **1. Input** | Build computation graph | [graph.hpp](src/graph/graph.hpp) |
+| **2. Pre-processing** | CSE, constant folding, simplification | [graph_optimizer.hpp](src/graph/graph_optimizer.hpp) |
+| **3. Forging** | Generate forward + backward (optional) code | [backends/](backends/) |
+| **4. Evaluation** | Run kernel repeatedly with different inputs | [forge_engine.hpp](src/compiler/forge_engine.hpp) |
 
 ```
-                                        ForgeEngine
-                                ┌──────────────────────────────────────┐
-   1. Graph                     │   2. Optimization     3. Forging     │            4. Execution
-                                │                                      │
-┌──────────────┐                │  ┌───────────────┐   ┌────────────┐  │          ┌──────────────┐
-│ Direct API   │                │  │ CSE           │   │  Forward   │  │          │              │
-│ Overloading  │───────────────▶│  │ Const Folding │──▶│     +      │──│─────────▶│Forged Kernel │
-│ External     │                │  │ Simplify      │   │  Backward  │  │          │              │
-└──────────────┘                │  └───────────────┘   └────────────┘  │          └──────────────┘
-                                │                                      │
-                                └──────────────────────────────────────┘
+  1. Input            2. Pre-processing       3. Forging              4. Evaluation
+                             ForgeEngine
+                      ┌─────────────────────────────────────┐
+┌────────────┐        │ ┌─────────────┐   ┌──────────────┐ │        ┌──────────────┐
+│ Direct API │        │ │ CSE         │   │   Forward    │ │        │              │
+│ Overloading│───────▶│ │ Const Fold  │──▶│      +       │─│───────▶│Forged Kernel │
+│ External   │        │ │ Simplify    │   │Backward(opt.)│ │        │              │
+└────────────┘        │ └─────────────┘   └──────────────┘ │        └──────────────┘
+                      └─────────────────────────────────────┘
 ```
 
 ## Example
