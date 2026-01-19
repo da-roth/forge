@@ -17,7 +17,7 @@ protected:
 
     // Helper to evaluate a kernel for given inputs
     std::vector<double> evaluateKernel(
-        StitchedKernel& kernel,
+        ForgedKernel& kernel,
         INodeValueBuffer& workspace,
         const std::vector<NodeId>& inputNodeIds,
         const std::vector<std::vector<double>>& testInputs,

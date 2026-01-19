@@ -4,14 +4,14 @@
 // SPDX-License-Identifier: Zlib
 
 /**
- * @file gradient_stitcher.cpp
+ * @file backward_forging.cpp
  * @brief Implementation of gradient pass code generation for automatic differentiation
  *
  * Generates x86/x64 assembly code for computing gradients via reverse-mode
  * automatic differentiation (backpropagation).
  */
 
-#include "gradient_stitcher.hpp"
+#include "backward_forging.hpp"
 #include "forge_engine.hpp"
 #include <stdexcept>
 #include <iostream>
@@ -44,7 +44,7 @@ const char* opName(OpCode op) {
 
 // All helper methods have been removed - using instruction set abstraction instead
 
-void GradientStitcher::generateGradientOperation(
+void BackwardForging::generateGradientOperation(
     x86::Assembler& a,
     const Node& node,
     NodeId nodeId,
@@ -184,7 +184,7 @@ void GradientStitcher::generateGradientOperation(
         case OpCode::Abs:
             // grad[a] += sign(value[a]) * grad[nodeId]
             // sign(x) = 1 if x > 0, -1 if x < 0, 0 if x == 0
-            // Using bit manipulation approach (same as forward stitcher for Abs)
+            // Using bit manipulation approach (same as forward forging for Abs)
             // This works correctly for both SSE2 and AVX2
             if (node.a < graph.nodes.size() && graph.nodes[node.a].needsGradient) {
                 instructionSet->emitLoadValueForGradient(a, 1, node.a, graph, &constantMap, constPoolLabel);
@@ -487,7 +487,7 @@ void GradientStitcher::generateGradientOperation(
     }
 }
 
-void GradientStitcher::stitchGradientPass(
+void BackwardForging::forgeBackwardPass(
     x86::Assembler& a,
     const Graph& graph,
     const std::unordered_map<NodeId, ForgeEngine::ConstantInfo>& constantMap,

@@ -56,7 +56,7 @@ private:
     size_t numOutputs_ = 0;
     bool dimensionsDetected_ = false;
     
-    std::unique_ptr<forge::StitchedKernel> kernel_;
+    std::unique_ptr<forge::ForgedKernel> kernel_;
     std::unique_ptr<forge::INodeValueBuffer> buffer_;
     std::vector<forge::NodeId> inputNodes_;
     std::vector<forge::NodeId> outputNodes_;

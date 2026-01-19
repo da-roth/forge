@@ -33,7 +33,6 @@ coverage_report
 *.json
 !examples/*.json
 
-# Documentation
+# Generated documentation (Doxygen)
 docs/html/
 docs/latex/
-docs/

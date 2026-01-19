@@ -13,42 +13,12 @@ Forge compiles mathematical expressions to optimized x86-64 machine code with au
 - **JIT Compilation**: Generates native x86-64 machine code via [AsmJit](https://github.com/asmjit/asmjit)
 - **Reverse-mode AD**: Automatic gradient computation for all recorded operations
 - **Graph Optimizations**: Common subexpression elimination, constant folding, algebraic simplification
-- **SIMD Backends**: SSE2 scalar (default) and AVX2 packed (4-wide), with extensible backend interface
+- **Instruction Set Backends**: SSE2 scalar (default) and AVX2 packed (4-wide SIMD), with extensible backend interface
 - **Branching Support**: Record-time conditional evaluation via `fbool` and `If()` for data-dependent control flow
 
-## Example
+### Pluggable Backend Architecture
 
-```cpp
-#include <forge.hpp>
-
-using namespace forge;
-
-int main() {
-    // Record computation: f(x) = x² + sin(x)
-    GraphRecorder recorder;
-    recorder.start();
-
-    fdouble x(0.0);
-    x.markInputAndDiff();
-    fdouble result = square(x) + sin(x);
-    result.markOutput();
-
-    recorder.stop();
-    Graph graph = recorder.graph();
-
-    // Compile to machine code
-    ForgeEngine compiler;
-    auto kernel = compiler.compile(graph);
-    auto buffer = NodeValueBufferFactory::create(graph, *kernel);
-
-    // Evaluate with different inputs
-    buffer->setValue(graph.diff_inputs[0], 2.0);
-    kernel->execute(*buffer);
-
-    double f_x = buffer->getValue(graph.outputs[0]);           // f(2.0)
-    double df_dx = buffer->getGradient(graph.diff_inputs[0]);  // f'(2.0)
-}
-```
+Forge is designed to be **backend-agnostic** — the core compiler is decoupled from specific instruction sets, number types, and hardware. The AVX2 backend demonstrates this: it can be bundled at compile time (`FORGE_BUNDLE_AVX2=ON`) or loaded dynamically at runtime via `InstructionSetFactory::loadBackend()`. This architecture enables custom backends with their own register allocation strategies, machine code generation, and memory layouts. The compilation policy (`ICompilationPolicy`) controls whether intermediate values are stored to memory or kept in registers — enabling forward-optimized execution when gradients aren't needed, or storing values for backward forging when they are. See [backends/](backends/) for implementation details and a step-by-step guide to creating custom backends.
 
 ## When to Use Forge
 
@@ -60,6 +30,82 @@ Forge is designed for **repeated evaluation** scenarios:
 - **Model calibration**: Repeated function/gradient evaluation during optimization
 
 **Trade-off**: Forge incurs upfront compilation cost. For single evaluations, tape-based AD is faster. Break-even typically occurs after 10–50 evaluations depending on graph complexity.
+
+### Performance
+
+In a [LIBOR swaption benchmark](docs/benchmarks.md) computing 161 sensitivities across varying Monte Carlo path counts:
+
+| Paths | XAD (tape) | Forge JIT | Forge JIT + AVX2 |
+|------:|-------:|-------:|-------:|
+| 100 | **15ms** | 35ms | 33ms |
+| 1K | 143ms | 126ms | **67ms** |
+| 10K | 1.4s | 1.0s | **0.4s** |
+| 100K | 14.3s | 9.9s | **3.5s** |
+
+At low path counts, tape-based AD is faster. Beyond ~1,000 evaluations, JIT compilation amortizes and Forge pulls ahead — with AVX2 SIMD providing an additional 2-4x speedup. See [benchmarks](docs/benchmarks.md) for full methodology and results.
+
+For detailed guidance on when to use JIT vs tape-based AD, see [xad-forge's usage guide](https://github.com/da-roth/xad-forge#when-to-use-jit).
+
+## Overview
+
+<table>
+<tr>
+  <th>Phase</th>
+  <th>Description</th>
+</tr>
+<tr>
+  <td><a href="src/graph/"><b>1. Graph API</b></a></td>
+  <td>Define computation graph using Direct API, operator overloading (<code>fdouble</code>), or transform from external sources (e.g., <a href="https://github.com/da-roth/xad-forge">xad-forge</a>)</td>
+</tr>
+<tr>
+  <td><a href="src/graph/optimizations/"><b>2. Graph Pre-processing</b></a></td>
+  <td>ForgeEngine applies graph optimizations: common subexpression elimination, constant folding, algebraic simplification, and stability cleaning</td>
+</tr>
+<tr>
+  <td><a href="backends/"><b>3. Kernel Forging</b></a></td>
+  <td>ForgeEngine compiles optimized graph to native machine code via forward forging and optional backward forging (for gradients) using pluggable instruction set backends</td>
+</tr>
+<tr>
+  <td><a href="examples/"><b>4. Execution</b></a></td>
+  <td>Execute the ForgedKernel repeatedly with varying inputs; retrieve computed values and gradients</td>
+</tr>
+</table>
+
+*Extensibility: Custom graph transformations (1), optimization passes (2), instruction set backends with custom machine code and register management (3).*
+
+## Example
+
+```cpp
+#include <graph/graph.hpp>
+#include <compiler/forge_engine.hpp>
+#include <compiler/interfaces/node_value_buffer.hpp>
+
+using namespace forge;
+
+int main() {
+    // 1. Graph API — Define f(x) = x² + sin(x) using Direct API
+    Graph graph;
+    NodeId x = graph.addInput();
+    graph.diff_inputs.push_back(x);                        // Mark x for gradient computation
+
+    NodeId x_squared = graph.addNode({OpCode::Mul, x, x}); // x²
+    NodeId sin_x = graph.addNode({OpCode::Sin, x});        // sin(x)
+    NodeId result = graph.addNode({OpCode::Add, x_squared, sin_x});
+    graph.markOutput(result);
+
+    // 2. Graph Pre-processing + 3. Kernel Forging — ForgeEngine compiles graph
+    ForgeEngine engine;
+    auto kernel = engine.compile(graph);
+    auto buffer = NodeValueBufferFactory::create(graph, *kernel);
+
+    // 4. Execution — Run ForgedKernel repeatedly with different inputs
+    buffer->setValue(x, 2.0);
+    kernel->execute(*buffer);
+
+    double f_x = buffer->getValue(result);    // f(2.0)
+    double df_dx = buffer->getGradient(x);    // f'(2.0)
+}
+```
 
 ## Getting Started
 
@@ -77,45 +123,22 @@ target_link_libraries(your_target PRIVATE forge::forge)
 
 Requires C++17 and CMake 3.20+. All dependencies are fetched automatically.
 
-## Documentation
-
-| Resource | Description |
-|----------|-------------|
-| [examples/](examples/) | Working demonstrations |
-| [api/native/](api/native/) | `fdouble`, `fbool`, `fint` operator overloading API |
-| [src/graph/graph.hpp](src/graph/graph.hpp) | Direct Graph API and `OpCode` definitions |
-| [backends/](backends/) | Backend implementation reference |
-
-## SIMD Backends
-
-Forge supports multiple instruction set backends:
-
-```cpp
-CompilerConfig config;
-config.instructionSet = CompilerConfig::InstructionSet::AVX2_PACKED;
-ForgeEngine compiler(config);
-```
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `FORGE_BUNDLE_AVX2` | ON | Bundle AVX2 backend into library |
-| `FORGE_BUILD_AVX2_BACKEND` | OFF | Build AVX2 as loadable shared library |
-
-Backends can also be loaded at runtime:
-```cpp
-InstructionSetFactory::loadBackend("./libforge_avx2.so");
-```
-
 ## License
 
-Zlib License. See [LICENSE.md](LICENSE.md).
+FORGE is licensed under the Zlib License. See [LICENSE.md](LICENSE.md) for details.
 
 ## Related Projects
 
 - [xad-forge](https://github.com/da-roth/xad-forge) — Forge JIT backend for [XAD](https://github.com/auto-differentiation/xad)
+- [QuantLib-Risks-Cpp-Forge](https://github.com/da-roth/QuantLib-Risks-Cpp-Forge) — [QuantLib-Risks](https://github.com/auto-differentiation/QuantLib-Risks-Cpp) with Forge JIT integration
+
+## Authors & Maintainers
+
+- [da-roth](https://github.com/da-roth)
 
 ## Acknowledgments
 
-- [AsmJit](https://github.com/asmjit/asmjit) — Machine code generation
-- [MathPresso](https://github.com/kobalicek/mathpresso) — JIT expression compilation inspiration
-- [SLEEF](https://github.com/shibatch/sleef) — Vectorized transcendental functions
+- [AsmJit](https://github.com/asmjit/asmjit) — High-performance machine code generation
+- [MathPresso](https://github.com/kobalicek/mathpresso) — Mathematical expression JIT compilation inspiration
+- [AutoDiffSharp](https://github.com/naasking/AutoDiffSharp) — Automatic differentiation design influence
+- [SLEEF](https://github.com/shibatch/sleef) — Vectorized math functions for SIMD operations

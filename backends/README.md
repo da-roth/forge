@@ -1,6 +1,12 @@
 # Forge Backends
 
-SIMD instruction set implementations for Forge's JIT compiler.
+Forge's backend system enables custom instruction set implementations with full control over machine code generation, register allocation, and memory layouts. Backends can be bundled at compile time or loaded dynamically at runtime.
+
+**Key interfaces** (see `src/compiler/interfaces/`):
+- `IInstructionSet` — Emits machine code for all supported operations
+- `INodeValueBuffer` — Manages value/gradient storage with custom alignment
+- `IRegisterAllocator` — Controls register allocation strategy
+- `ICompilationPolicy` — Decides when to store values to memory vs keep in registers (forward-optimized vs backward-compatible)
 
 ## Structure
 

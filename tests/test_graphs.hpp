@@ -1553,11 +1553,11 @@ inline std::vector<TestGraph> createTestGraphsWithGradient() {
 
     // ========================================================================
     // Tests with BOTH inputs marked for differentiation
-    // These cover the node.b gradient paths in gradient_stitcher.cpp
+    // These cover the node.b gradient paths in backward_forging.cpp
     // ========================================================================
 
     // Add with both inputs: output = x + y, grad w.r.t x = 1, grad w.r.t y = 1
-    // This covers Add node.b gradient path (line 92-93 in gradient_stitcher.cpp)
+    // This covers Add node.b gradient path (line 92-93 in backward_forging.cpp)
     {
         TestGraph tg;
         tg.name = "Add: x+y (both grads=1)";
@@ -1589,7 +1589,7 @@ inline std::vector<TestGraph> createTestGraphsWithGradient() {
     }
 
     // Sub with both inputs: output = x - y, grad w.r.t x = 1, grad w.r.t y = -1
-    // This covers Sub node.b gradient path (line 111-112 in gradient_stitcher.cpp)
+    // This covers Sub node.b gradient path (line 111-112 in backward_forging.cpp)
     {
         TestGraph tg;
         tg.name = "Sub: x-y (grad_x=1, grad_y=-1)";
@@ -1621,7 +1621,7 @@ inline std::vector<TestGraph> createTestGraphsWithGradient() {
     }
 
     // Mul with both inputs: output = x * y, grad w.r.t x = y, grad w.r.t y = x
-    // This covers Mul node.b gradient path (line 127-130 in gradient_stitcher.cpp)
+    // This covers Mul node.b gradient path (line 127-130 in backward_forging.cpp)
     {
         TestGraph tg;
         tg.name = "Mul: x*y (grad_x=y)";
@@ -1653,7 +1653,7 @@ inline std::vector<TestGraph> createTestGraphsWithGradient() {
     }
 
     // Div with both inputs: output = x / y, grad w.r.t x = 1/y, grad w.r.t y = -x/y^2
-    // This covers Div node.b gradient path (line 165-172 in gradient_stitcher.cpp)
+    // This covers Div node.b gradient path (line 165-172 in backward_forging.cpp)
     {
         TestGraph tg;
         tg.name = "Div: x/y (grad_x=1/y)";
@@ -1685,7 +1685,7 @@ inline std::vector<TestGraph> createTestGraphsWithGradient() {
     }
 
     // Abs: output = |x|, grad w.r.t x = sign(x)
-    // This covers Abs gradient path (line 198+ in gradient_stitcher.cpp)
+    // This covers Abs gradient path (line 198+ in backward_forging.cpp)
     {
         TestGraph tg;
         tg.name = "Abs: |x| (grad=sign(x))";

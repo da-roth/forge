@@ -17,7 +17,7 @@
 namespace forge {
 
 // Forward declaration
-class StitchedKernel;
+class ForgedKernel;
 
 /**
  * Interface for node value storage that kernels read from and write to.
@@ -397,7 +397,7 @@ public:
      */
     static std::unique_ptr<INodeValueBuffer> create(
         const forge::Graph& tape,
-        const StitchedKernel& kernel);
+        const ForgedKernel& kernel);
 
     /**
      * Register a buffer creator for a specific vector width.

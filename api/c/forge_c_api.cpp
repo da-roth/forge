@@ -47,7 +47,7 @@ struct ForgeConfig_ {
 };
 
 struct ForgeKernel_ {
-    std::unique_ptr<forge::StitchedKernel> kernel;
+    std::unique_ptr<forge::ForgedKernel> kernel;
 };
 
 struct ForgeBuffer_ {

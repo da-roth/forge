@@ -7,10 +7,10 @@
  * @file forge_engine.hpp
  * @brief Main JIT compiler interface for mathematical expression graphs
  *
- * Defines ForgeEngine (the compiler) and StitchedKernel (the compiled executable).
+ * Defines ForgeEngine (the compiler) and ForgedKernel (the compiled executable).
  * ForgeEngine compiles expression graphs into optimized machine code using AsmJit.
  *
- * Thread Safety: ForgeEngine instances are not thread-safe. StitchedKernel instances
+ * Thread Safety: ForgeEngine instances are not thread-safe. ForgedKernel instances
  * are safe to execute concurrently from multiple threads.
  */
 
@@ -42,7 +42,7 @@
 namespace forge {
 
 // Forward declaration
-class StitchedKernel;
+class ForgedKernel;
 
 /**
  * @brief JIT compiler for mathematical expression graphs
@@ -95,7 +95,7 @@ public:
      *
      * Thread Safety: Not thread-safe
      */
-    std::unique_ptr<StitchedKernel> compile(const forge::Graph& graph);
+    std::unique_ptr<ForgedKernel> compile(const forge::Graph& graph);
 
     /**
      * @brief Get current compiler configuration
@@ -157,8 +157,8 @@ private:
     // Now creates appropriate allocator based on instruction set
     std::unique_ptr<IRegisterAllocator> createRegisterAllocator() const;
 
-    // Forward pass code generation has been migrated to forward_stitcher.cpp
-    // See ForwardStitcher class for implementation
+    // Forward pass code generation has been migrated to forward_forging.cpp
+    // See ForwardForging class for implementation
 };
 
 /**
@@ -180,19 +180,19 @@ private:
  * kernel->execute(buffer);  // Compute forward + gradient passes
  * @endcode
  */
-class StitchedKernel {
+class ForgedKernel {
 public:
     /** @brief Function signature for compiled kernels */
     using KernelFunc = void(*)(double* values, double* gradients, size_t count);
 
-    StitchedKernel(KernelFunc func, asmjit::JitRuntime& runtime, size_t num_nodes, const IInstructionSet* instructionSet, const CompilerConfig& config, size_t max_node_id = 0, size_t working_nodes = 0)
+    ForgedKernel(KernelFunc func, asmjit::JitRuntime& runtime, size_t num_nodes, const IInstructionSet* instructionSet, const CompilerConfig& config, size_t max_node_id = 0, size_t working_nodes = 0)
         : func_(func), runtime_(&runtime), num_nodes_(num_nodes),
           vector_width_(instructionSet->getVectorWidth()),
           instruction_set_name_(instructionSet->getName()),
           config_(config), max_node_id_(max_node_id), working_nodes_(working_nodes > 0 ? working_nodes : num_nodes) {}
 
     // Constructor with node ID mapping
-    StitchedKernel(KernelFunc func, asmjit::JitRuntime& runtime, size_t num_nodes, const IInstructionSet* instructionSet, const CompilerConfig& config,
+    ForgedKernel(KernelFunc func, asmjit::JitRuntime& runtime, size_t num_nodes, const IInstructionSet* instructionSet, const CompilerConfig& config,
                    const std::vector<forge::NodeId>& originalToOptimizedMapping, size_t max_node_id = 0, size_t working_nodes = 0,
                    const std::vector<forge::NodeId>& outputNodes = {})
         : func_(func), runtime_(&runtime), num_nodes_(num_nodes),
@@ -208,7 +208,7 @@ public:
         //           << ", getMaxNodeId()=" << getMaxNodeId() << std::endl;
     }
     
-    ~StitchedKernel() {
+    ~ForgedKernel() {
         if (func_ && runtime_) {
             runtime_->release(func_);
         }
@@ -371,11 +371,11 @@ public:
     }
     
     // Disable copy
-    StitchedKernel(const StitchedKernel&) = delete;
-    StitchedKernel& operator=(const StitchedKernel&) = delete;
+    ForgedKernel(const ForgedKernel&) = delete;
+    ForgedKernel& operator=(const ForgedKernel&) = delete;
     
     // Enable move
-    StitchedKernel(StitchedKernel&& other) noexcept
+    ForgedKernel(ForgedKernel&& other) noexcept
         : func_(other.func_), runtime_(other.runtime_), num_nodes_(other.num_nodes_),
           vector_width_(other.vector_width_),
           instruction_set_name_(std::move(other.instruction_set_name_)),

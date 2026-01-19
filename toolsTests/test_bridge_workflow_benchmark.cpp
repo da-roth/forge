@@ -80,7 +80,7 @@ protected:
         size_t maxExternalIndex;
 
         BridgeWorkspaceSimulator(const Graph& graph,
-                                 const StitchedKernel& kernel,
+                                 const ForgedKernel& kernel,
                                  size_t maxExternal)
             : csharpArrays(maxExternal), maxExternalIndex(maxExternal) {
 
