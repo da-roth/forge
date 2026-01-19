@@ -117,6 +117,36 @@ ForgeEngine compiler(config);
 auto kernel = compiler.compile(graph);  // Generates AVX2 code
 ```
 
+### Runtime Backend Loading
+
+Backends can be loaded at runtime from shared libraries, enabling custom SIMD implementations without recompiling Forge:
+
+```cpp
+// Load a custom backend at runtime
+InstructionSetFactory::loadBackend("./libforge_custom_backend.so");
+
+// Now use the registered instruction set
+auto customIS = InstructionSetFactory::createByName("Custom-Backend");
+```
+
+The library must export a C function `forge_register_backend()` that registers the instruction set and buffer creator:
+
+```cpp
+// In your backend library:
+extern "C" void forge_register_backend() {
+    forge::InstructionSetFactory::registerInstructionSet(
+        "Custom-Backend",
+        []() { return std::make_unique<CustomInstructionSet>(); }
+    );
+    forge::NodeValueBufferFactory::registerBufferCreator(
+        vectorWidth,  // e.g., 8 for AVX-512
+        createCustomBuffer
+    );
+}
+```
+
+See `backends/double/avx2/avx2_backend.cpp` for a complete example.
+
 ### Backend Components
 
 ```
@@ -159,6 +189,24 @@ mkdir build && cd build
 cmake -DCMAKE_BUILD_TYPE=Release ..
 cmake --build . -j
 ctest  # Run tests
+```
+
+### CMake Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `FORGE_BUNDLE_AVX2` | ON | Bundle AVX2 backend into the library |
+| `FORGE_BUILD_AVX2_BACKEND` | OFF | Build AVX2 as a loadable shared library (`libforge_avx2.so`) |
+
+**SSE2-only build** (smaller binary, works on all x86-64):
+```bash
+cmake -DFORGE_BUNDLE_AVX2=OFF ..
+```
+
+**Build AVX2 for runtime loading** (useful for distributing optional acceleration):
+```bash
+cmake -DFORGE_BUNDLE_AVX2=OFF -DFORGE_BUILD_AVX2_BACKEND=ON ..
+# Creates: libforge.a (SSE2 only) + libforge_avx2.so (loadable)
 ```
 
 ### CMake Integration
