@@ -232,12 +232,18 @@ option(FORGE_BUILD_AVX2_BACKEND "Build AVX2 as a loadable shared library" OFF)
 
 if(FORGE_BUILD_AVX2_BACKEND)
     add_library(forge_avx2 SHARED
+        # AVX2-specific implementation
         backends/double/avx2/avx2_instruction_set.cpp
         backends/double/avx2/avx2_backend.cpp
+        # Required dependencies (must be self-contained for dynamic loading)
+        src/compiler/x86/common/x86_instruction_set_base.cpp
+        src/compiler/runtime_trace.cpp
+        # Minimal registration support for loadable backends
+        backends/double/avx2/avx2_backend_registration.cpp
     )
     target_include_directories(forge_avx2 PRIVATE ${FORGE_INCLUDE_DIRS})
     target_compile_options(forge_avx2 PRIVATE ${FORGE_AVX2_COMPILE_OPTIONS})
-    target_compile_definitions(forge_avx2 PRIVATE SLEEF_STATIC_LIBS)
+    target_compile_definitions(forge_avx2 PRIVATE SLEEF_STATIC_LIBS FORGE_LOADABLE_BACKEND)
     target_link_libraries(forge_avx2 PRIVATE asmjit sleefavx2 sleef)
     set_target_properties(forge_avx2 PROPERTIES
         OUTPUT_NAME "forge_avx2"
