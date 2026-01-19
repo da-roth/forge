@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../../../interfaces/node_value_buffer.hpp"
+#include "compiler/interfaces/node_value_buffer.hpp"
 #include <immintrin.h>  // For AVX2 intrinsics
 
 namespace forge {

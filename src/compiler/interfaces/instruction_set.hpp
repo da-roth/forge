@@ -19,7 +19,7 @@
 
 #include <asmjit/x86.h>
 #include "../../graph/graph.hpp"
-#include "../x86/common/register_allocator_base.hpp"  // Use new base interface
+#include "register_allocator.hpp"  // IRegisterAllocator interface
 #include <memory>
 #include <string>
 

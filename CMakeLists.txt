@@ -143,6 +143,8 @@ set(FORGE_INCLUDE_DIRS
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${CMAKE_CURRENT_SOURCE_DIR}/api
     ${CMAKE_CURRENT_SOURCE_DIR}/tools
+    ${CMAKE_CURRENT_SOURCE_DIR}/backends
+    ${CMAKE_CURRENT_SOURCE_DIR}
     ${asmjit_SOURCE_DIR}/src
     ${sleef_BINARY_DIR}/include
 )
@@ -190,7 +192,6 @@ target_link_libraries(forge_core PUBLIC asmjit nlohmann_json::nlohmann_json)
 # -----------------------------------------------------------------------------
 add_library(forge_x86_common OBJECT
     src/compiler/x86/common/x86_instruction_set_base.cpp
-    src/compiler/x86/common/register_allocator.cpp
 )
 target_include_directories(forge_x86_common PUBLIC ${FORGE_INCLUDE_DIRS})
 target_compile_options(forge_x86_common PRIVATE ${FORGE_BASE_COMPILE_OPTIONS})
@@ -201,7 +202,7 @@ target_link_libraries(forge_x86_common PUBLIC asmjit)
 # Note: node_value_buffer_factory.cpp is here because it includes AVX2 buffer headers
 # -----------------------------------------------------------------------------
 add_library(forge_x86_double_avx2 OBJECT
-    src/compiler/x86/double/avx2/avx2_instruction_set.cpp
+    backends/double/avx2/avx2_instruction_set.cpp
     src/compiler/x86/common/node_value_buffer_factory.cpp
 )
 target_include_directories(forge_x86_double_avx2 PUBLIC ${FORGE_INCLUDE_DIRS})

@@ -5,72 +5,21 @@
 
 /**
  * @file register_allocator_base.hpp
- * @brief Register allocation interface and template implementation
+ * @brief Template base implementation for register allocators
  *
- * Provides an abstract interface for register allocators with a shared
- * template implementation that works across different register types
- * (SSE2/XMM, AVX2/YMM, AVX-512/ZMM, etc.).
+ * Provides a shared template implementation that works across different
+ * register types (SSE2/XMM, AVX2/YMM, AVX-512/ZMM, etc.).
  *
  * Thread Safety: Not thread-safe - each compilation uses its own allocator
  */
 
 #pragma once
 
-#include "../../../graph/graph.hpp"
+#include "../../interfaces/register_allocator.hpp"
 #include <climits>
 #include <stdexcept>
-#include <initializer_list>
 
 namespace forge {
-
-/**
- * @brief Abstract interface for register allocators
- *
- * All register allocators must implement this interface to work with the
- * JIT compiler. The interface abstracts away differences between XMM, YMM,
- * and future register types while providing a common allocation strategy.
- *
- * Features:
- * - LRU (Least Recently Used) allocation strategy
- * - Register locking for values in use
- * - Dirty tracking for writeback optimization
- * - Node-to-register mapping
- * - Volatile register invalidation (calling convention support)
- * - Register blacklisting (corruption workaround)
- *
- * API Stability: Stable
- */
-class IRegisterAllocator {
-public:
-    virtual ~IRegisterAllocator() = default;
-    
-    // Core allocation interface
-    virtual int allocateRegister() = 0;
-    virtual int allocateAvoiding(std::initializer_list<int> avoid) = 0;
-    
-    // Register state management
-    virtual void clear() = 0;
-    virtual void lock(int regIndex) = 0;
-    virtual void unlock(int regIndex) = 0;
-    
-    // Register content tracking
-    virtual int findNodeInRegister(forge::NodeId nodeId) const = 0;
-    virtual void setRegister(int regIndex, forge::NodeId nodeId, bool isDirty = false) = 0;
-    virtual int getNodeInRegister(int regIndex) const = 0;
-    
-    // Dirty register tracking
-    virtual void markDirty(int regIndex) = 0;
-    virtual void markClean(int regIndex) = 0;
-    virtual bool isDirty(int regIndex) const = 0;
-    
-    // Platform-specific invalidation
-    virtual void invalidateVolatileRegisters() = 0;
-    virtual int getFirstVolatileReg() const = 0;
-    virtual int getLastVolatileReg() const = 0;
-    
-    // Get the number of registers
-    virtual int getNumRegisters() const = 0;
-};
 
 /**
  * @brief Template implementation of register allocator
