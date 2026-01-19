@@ -35,11 +35,11 @@ Forge is designed for **repeated evaluation** scenarios:
   <th>Description</th>
 </tr>
 <tr>
-  <td><a href="src/graph/"><b>1. Graph Construction</b></a></td>
-  <td>Build computation graph via Direct API or operator overloading</td>
+  <td><a href="src/graph/"><b>1. Graph API</b></a></td>
+  <td>Build computation graph via Direct API, operator overloading, or external transformation</td>
 </tr>
 <tr>
-  <td><a href="src/graph/optimizations/"><b>2. Graph Optimization</b></a></td>
+  <td><a href="src/graph/optimizations/"><b>2. Graph Pre-processing</b></a></td>
   <td>ForgeEngine optimizes: CSE, constant folding, simplification, stability cleaning</td>
 </tr>
 <tr>
