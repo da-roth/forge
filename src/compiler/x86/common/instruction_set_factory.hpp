@@ -17,6 +17,8 @@
 #pragma once
 
 #include "../../interfaces/instruction_set.hpp"
+#include "../../interfaces/node_value_buffer.hpp"
+#include "../../../graph/graph.hpp"
 #include "../double/scalar/sse2_scalar_instruction_set.hpp"
 #ifdef FORGE_BUNDLE_AVX2
 #include "../../../../backends/double/avx2/avx2_instruction_set.hpp"
@@ -42,6 +44,19 @@
 #endif
 
 namespace forge {
+
+/**
+ * @brief API struct passed to dynamically loaded backends
+ *
+ * This struct contains function pointers that backends use to register
+ * themselves with the main program. This solves the Windows DLL issue
+ * where static variables are duplicated between the main exe and DLL.
+ */
+struct ForgeBackendAPI {
+    void (*registerInstructionSet)(const char* name, std::unique_ptr<IInstructionSet>(*)());
+    void (*registerBufferCreator)(int vectorWidth, std::unique_ptr<INodeValueBuffer>(*)(
+        const Graph&, const std::vector<NodeId>&, size_t));
+};
 
 /**
  * @brief Factory for creating instruction set implementations
@@ -207,16 +222,15 @@ public:
      *     // ... implementation ...
      * };
      *
-     * extern "C" void forge_register_backend() {
-     *     forge::InstructionSetFactory::registerInstructionSet(
-     *         "AVX512-Packed",
-     *         []() { return std::make_unique<AVX512InstructionSet>(); }
-     *     );
+     * extern "C" void forge_register_backend_v2(ForgeBackendAPI* api) {
+     *     api->registerInstructionSet("AVX512-Packed",
+     *         []() { return std::make_unique<AVX512InstructionSet>(); });
      * }
      * @endcode
      */
     static bool loadBackend(const std::string& libraryPath) {
-        using RegisterFunc = void(*)();
+        // V2 API uses callbacks to avoid Windows DLL static variable issues
+        using RegisterFuncV2 = void(*)(ForgeBackendAPI*);
 
 #ifdef _WIN32
         HMODULE handle = LoadLibraryA(libraryPath.c_str());
@@ -226,13 +240,14 @@ public:
                 "Failed to load library '" + libraryPath + "': error code " + std::to_string(error));
         }
 
-        RegisterFunc registerFunc = reinterpret_cast<RegisterFunc>(
-            GetProcAddress(handle, "forge_register_backend"));
+        // Try V2 API first (required for Windows)
+        RegisterFuncV2 registerFuncV2 = reinterpret_cast<RegisterFuncV2>(
+            GetProcAddress(handle, "forge_register_backend_v2"));
 
-        if (!registerFunc) {
+        if (!registerFuncV2) {
             FreeLibrary(handle);
             throw std::runtime_error(
-                "Library '" + libraryPath + "' does not export 'forge_register_backend'");
+                "Library '" + libraryPath + "' does not export 'forge_register_backend_v2'");
         }
 
         getLibraryHandles().push_back(handle);
@@ -245,28 +260,40 @@ public:
 
         dlerror(); // Clear any existing error
 
-        RegisterFunc registerFunc = reinterpret_cast<RegisterFunc>(
-            dlsym(handle, "forge_register_backend"));
+        // Try V2 API first (required for Windows, also works on Linux)
+        RegisterFuncV2 registerFuncV2 = reinterpret_cast<RegisterFuncV2>(
+            dlsym(handle, "forge_register_backend_v2"));
 
-        const char* dlsymError = dlerror();
-        if (dlsymError) {
+        if (!registerFuncV2) {
             dlclose(handle);
             throw std::runtime_error(
-                "Library '" + libraryPath + "' does not export 'forge_register_backend': " + dlsymError);
-        }
-
-        if (!registerFunc) {
-            dlclose(handle);
-            throw std::runtime_error(
-                "Library '" + libraryPath + "' does not export 'forge_register_backend'");
+                "Library '" + libraryPath + "' does not export 'forge_register_backend_v2'");
         }
 
         getLibraryHandles().push_back(handle);
 #endif
 
-        registerFunc();
+        // Create API callbacks that register into this process's registry
+        ForgeBackendAPI api;
+        api.registerInstructionSet = &registerInstructionSetCallback;
+        api.registerBufferCreator = &registerBufferCreatorCallback;
+
+        registerFuncV2(&api);
         return true;
     }
+
+private:
+    // Callback wrappers for the backend API
+    static void registerInstructionSetCallback(const char* name, std::unique_ptr<IInstructionSet>(*factory)()) {
+        getRegistry()[name] = factory;
+    }
+
+    static void registerBufferCreatorCallback(int vectorWidth,
+        std::unique_ptr<INodeValueBuffer>(*creator)(const Graph&, const std::vector<NodeId>&, size_t)) {
+        NodeValueBufferFactory::registerBufferCreator(vectorWidth, creator);
+    }
+
+public:
 
     /**
      * @brief Unload all dynamically loaded backend libraries
