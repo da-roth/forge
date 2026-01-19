@@ -16,6 +16,10 @@ Forge compiles mathematical expressions to optimized x86-64 machine code with au
 - **Instruction Set Backends**: SSE2 scalar (default) and AVX2 packed (4-wide SIMD), with extensible backend interface
 - **Branching Support**: Record-time conditional evaluation via `fbool` and `If()` for data-dependent control flow
 
+### Pluggable Backend Architecture
+
+Forge is designed to be **backend-agnostic** — the core compiler is decoupled from specific instruction sets, number types, and hardware. The AVX2 backend demonstrates this: it can be bundled at compile time (`FORGE_BUNDLE_AVX2=ON`) or loaded dynamically at runtime via `InstructionSetFactory::loadBackend()`. This architecture enables custom backends with their own register allocation strategies, machine code generation, and memory layouts. The compilation policy (`ICompilationPolicy`) controls whether intermediate values are stored to memory or kept in registers — enabling forward-optimized execution when gradients aren't needed, or storing values for backward forging when they are. See [backends/](backends/) for implementation details and a step-by-step guide to creating custom backends.
+
 ## When to Use Forge
 
 Forge is designed for **repeated evaluation** scenarios:
