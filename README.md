@@ -36,23 +36,23 @@ Forge is designed for **repeated evaluation** scenarios:
 </tr>
 <tr>
   <td><a href="src/graph/"><b>1. Graph API</b></a></td>
-  <td>Build computation graph via Direct API, operator overloading, or external transformation</td>
+  <td>Define computation graph using Direct API, operator overloading (<code>fdouble</code>), or transform from external sources (e.g., <a href="https://github.com/da-roth/xad-forge">xad-forge</a>)</td>
 </tr>
 <tr>
   <td><a href="src/graph/optimizations/"><b>2. Graph Pre-processing</b></a></td>
-  <td>ForgeEngine optimizes: CSE, constant folding, simplification, stability cleaning</td>
+  <td>ForgeEngine applies graph optimizations: common subexpression elimination, constant folding, algebraic simplification, and stability cleaning</td>
 </tr>
 <tr>
   <td><a href="backends/"><b>3. Kernel Forging</b></a></td>
-  <td>ForgeEngine generates forward pass + optional backward pass machine code</td>
+  <td>ForgeEngine compiles optimized graph to native machine code for forward pass and optional backward pass (gradients) using pluggable instruction set backends</td>
 </tr>
 <tr>
   <td><a href="examples/"><b>4. Execution</b></a></td>
-  <td>Run compiled kernel repeatedly with different inputs, retrieve values and gradients</td>
+  <td>Execute the compiled kernel repeatedly with varying inputs; retrieve computed values and gradients</td>
 </tr>
 </table>
 
-<sub>Extensibility: Custom graph transformations (1), custom optimization passes (2), custom instruction set backends (3)</sub>
+*Extensibility: Phases 1-3 support custom extensions — graph transformations, optimization passes, and instruction set backends respectively.*
 
 ## Example
 
