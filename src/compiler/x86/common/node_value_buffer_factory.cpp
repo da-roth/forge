@@ -1,6 +1,6 @@
 #include "../../interfaces/node_value_buffer.hpp"
 #include "../double/scalar/scalar_node_value_buffer.hpp"
-#include "../double/avx2/avx2_node_value_buffer.hpp"
+#include "../../../../backends/double/avx2/avx2_node_value_buffer.hpp"
 #include "../../forge_engine.hpp"
 
 namespace forge {

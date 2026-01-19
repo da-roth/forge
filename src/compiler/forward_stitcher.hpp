@@ -18,7 +18,7 @@
 #pragma once
 
 #include "../graph/graph.hpp"
-#include "x86/common/register_allocator_base.hpp"
+#include "interfaces/register_allocator.hpp"  // IRegisterAllocator interface
 #include "x86/common/compiler_config.hpp"
 #include "forge_engine.hpp"
 #include "interfaces/instruction_set.hpp"

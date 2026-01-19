@@ -19,7 +19,7 @@
 #pragma once
 
 #include "../../graph/graph.hpp"
-#include "../x86/common/register_allocator_base.hpp"
+#include "register_allocator.hpp"  // IRegisterAllocator interface
 #include <asmjit/x86.h>
 #include <cstdint>
 

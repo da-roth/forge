@@ -18,7 +18,7 @@
 
 #include "../../interfaces/instruction_set.hpp"
 #include "../double/scalar/sse2_scalar_instruction_set.hpp"
-#include "../double/avx2/avx2_instruction_set.hpp"
+#include "../../../../backends/double/avx2/avx2_instruction_set.hpp"
 #include "compiler_config.hpp"
 #include <memory>
 #include <unordered_map>

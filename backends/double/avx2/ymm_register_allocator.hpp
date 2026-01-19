@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../../common/register_allocator_base.hpp"
+#include "compiler/x86/common/register_allocator_base.hpp"
 #include <asmjit/x86.h>
 
 namespace forge {

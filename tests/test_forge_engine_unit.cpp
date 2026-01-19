@@ -560,7 +560,7 @@ TEST(ForgeEngineTestAVX2Optimized, CompileAndExecuteWithGradient) {
 // ============================================================================
 
 #include "../src/compiler/x86/double/scalar/xmm_register_allocator.hpp"
-#include "../src/compiler/x86/double/avx2/ymm_register_allocator.hpp"
+#include "../backends/double/avx2/ymm_register_allocator.hpp"
 
 // Test that exercises the LRU eviction path in allocateAvoiding()
 // This happens when all registers are occupied and we need to evict one
