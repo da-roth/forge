@@ -85,6 +85,7 @@ target_compile_definitions(forge_capi PRIVATE
     FORGE_VERSION_MAJOR=${PROJECT_VERSION_MAJOR}
     FORGE_VERSION_MINOR=${PROJECT_VERSION_MINOR}
     FORGE_VERSION_PATCH=${PROJECT_VERSION_PATCH}
+    $<$<BOOL:${FORGE_BUNDLE_AVX2}>:FORGE_BUNDLE_AVX2>
 )
 
 # Include directories for building (PRIVATE = internal forge headers)

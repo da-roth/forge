@@ -38,6 +38,9 @@ endif()
 # Runtime library option for MSVC
 option(FORGE_USE_STATIC_RUNTIME "Use static runtime library (/MT) instead of dynamic (/MD)" ON)
 
+# Backend bundling options
+option(FORGE_BUNDLE_AVX2 "Bundle AVX2 backend into the library (can still be loaded at runtime if OFF)" ON)
+
 if(MSVC AND FORGE_USE_STATIC_RUNTIME)
     # Set static runtime for all targets in this project
     set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
@@ -186,42 +189,83 @@ add_library(forge_core OBJECT
 target_include_directories(forge_core PUBLIC ${FORGE_INCLUDE_DIRS})
 target_compile_options(forge_core PRIVATE ${FORGE_BASE_COMPILE_OPTIONS})
 target_link_libraries(forge_core PUBLIC asmjit nlohmann_json::nlohmann_json)
+if(FORGE_BUNDLE_AVX2)
+    target_compile_definitions(forge_core PRIVATE FORGE_BUNDLE_AVX2)
+endif()
 
 # -----------------------------------------------------------------------------
-# forge_x86_common: x86 common code, register allocator (no SIMD)
+# forge_x86_common: x86 common code, register allocator, buffer factory (no SIMD)
 # -----------------------------------------------------------------------------
 add_library(forge_x86_common OBJECT
     src/compiler/x86/common/x86_instruction_set_base.cpp
+    src/compiler/x86/common/node_value_buffer_factory.cpp
 )
 target_include_directories(forge_x86_common PUBLIC ${FORGE_INCLUDE_DIRS})
 target_compile_options(forge_x86_common PRIVATE ${FORGE_BASE_COMPILE_OPTIONS})
 target_link_libraries(forge_x86_common PUBLIC asmjit)
+if(FORGE_BUNDLE_AVX2)
+    target_compile_definitions(forge_x86_common PRIVATE FORGE_BUNDLE_AVX2)
+endif()
 
 # -----------------------------------------------------------------------------
 # forge_x86_double_avx2: AVX2 instruction set implementation (-mavx2)
-# Note: node_value_buffer_factory.cpp is here because it includes AVX2 buffer headers
+# Only built when FORGE_BUNDLE_AVX2 is ON
 # -----------------------------------------------------------------------------
-add_library(forge_x86_double_avx2 OBJECT
-    backends/double/avx2/avx2_instruction_set.cpp
-    src/compiler/x86/common/node_value_buffer_factory.cpp
-)
-target_include_directories(forge_x86_double_avx2 PUBLIC ${FORGE_INCLUDE_DIRS})
-target_compile_options(forge_x86_double_avx2 PRIVATE ${FORGE_AVX2_COMPILE_OPTIONS})
-target_compile_definitions(forge_x86_double_avx2 PUBLIC SLEEF_STATIC_LIBS)
-target_link_libraries(forge_x86_double_avx2 PUBLIC asmjit sleefavx2 sleef)
+if(FORGE_BUNDLE_AVX2)
+    add_library(forge_x86_double_avx2 OBJECT
+        backends/double/avx2/avx2_instruction_set.cpp
+        backends/double/avx2/avx2_static_registration.cpp
+    )
+    target_include_directories(forge_x86_double_avx2 PUBLIC ${FORGE_INCLUDE_DIRS})
+    target_compile_options(forge_x86_double_avx2 PRIVATE ${FORGE_AVX2_COMPILE_OPTIONS})
+    target_compile_definitions(forge_x86_double_avx2 PUBLIC SLEEF_STATIC_LIBS FORGE_BUNDLE_AVX2)
+    target_link_libraries(forge_x86_double_avx2 PUBLIC asmjit sleefavx2 sleef)
+endif()
+
+# -----------------------------------------------------------------------------
+# forge_avx2 (optional): Loadable AVX2 backend shared library
+# Build with: cmake -DFORGE_BUILD_AVX2_BACKEND=ON ...
+# Use with: InstructionSetFactory::loadBackend("./libforge_avx2.so")
+# -----------------------------------------------------------------------------
+option(FORGE_BUILD_AVX2_BACKEND "Build AVX2 as a loadable shared library" OFF)
+
+if(FORGE_BUILD_AVX2_BACKEND)
+    add_library(forge_avx2 SHARED
+        backends/double/avx2/avx2_instruction_set.cpp
+        backends/double/avx2/avx2_backend.cpp
+    )
+    target_include_directories(forge_avx2 PRIVATE ${FORGE_INCLUDE_DIRS})
+    target_compile_options(forge_avx2 PRIVATE ${FORGE_AVX2_COMPILE_OPTIONS})
+    target_compile_definitions(forge_avx2 PRIVATE SLEEF_STATIC_LIBS)
+    target_link_libraries(forge_avx2 PRIVATE asmjit sleefavx2 sleef)
+    set_target_properties(forge_avx2 PROPERTIES
+        OUTPUT_NAME "forge_avx2"
+        VERSION ${PROJECT_VERSION}
+        SOVERSION ${PROJECT_VERSION_MAJOR}
+    )
+endif()
 
 # =============================================================================
 # Main Forge Library - Combines all OBJECT libraries
 # =============================================================================
 
-add_library(forge STATIC
-    $<TARGET_OBJECTS:forge_core>
-    $<TARGET_OBJECTS:forge_x86_common>
-    $<TARGET_OBJECTS:forge_x86_double_avx2>
-)
-
-# Link dependencies
-target_link_libraries(forge PUBLIC asmjit nlohmann_json::nlohmann_json sleefavx2 sleef)
+if(FORGE_BUNDLE_AVX2)
+    add_library(forge STATIC
+        $<TARGET_OBJECTS:forge_core>
+        $<TARGET_OBJECTS:forge_x86_common>
+        $<TARGET_OBJECTS:forge_x86_double_avx2>
+    )
+    # Link dependencies (with SLEEF AVX2)
+    target_link_libraries(forge PUBLIC asmjit nlohmann_json::nlohmann_json sleefavx2 sleef)
+    target_compile_definitions(forge PUBLIC FORGE_BUNDLE_AVX2)
+else()
+    add_library(forge STATIC
+        $<TARGET_OBJECTS:forge_core>
+        $<TARGET_OBJECTS:forge_x86_common>
+    )
+    # Link dependencies (without SLEEF AVX2)
+    target_link_libraries(forge PUBLIC asmjit nlohmann_json::nlohmann_json sleef)
+endif()
 
 # Include directories for consumers
 target_include_directories(forge PUBLIC

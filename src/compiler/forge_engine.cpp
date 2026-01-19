@@ -63,7 +63,11 @@ std::unique_ptr<IRegisterAllocator> ForgeEngine::createRegisterAllocator() const
     if (config_.useNamedInstructionSet && instructionSet_) {
         int vectorWidth = instructionSet_->getVectorWidth();
         if (vectorWidth >= 4) {
+#ifdef FORGE_BUNDLE_AVX2
             return std::make_unique<YmmRegisterAllocator>();
+#else
+            throw std::runtime_error("AVX2 register allocator not available. AVX2 backend not bundled.");
+#endif
         } else {
             return std::make_unique<XmmRegisterAllocator>();
         }
@@ -72,7 +76,11 @@ std::unique_ptr<IRegisterAllocator> ForgeEngine::createRegisterAllocator() const
     // Create appropriate allocator based on instruction set enum
     switch (config_.instructionSet) {
         case CompilerConfig::InstructionSet::AVX2_PACKED:
+#ifdef FORGE_BUNDLE_AVX2
             return std::make_unique<YmmRegisterAllocator>();
+#else
+            throw std::runtime_error("AVX2 register allocator not available. AVX2 backend not bundled.");
+#endif
         case CompilerConfig::InstructionSet::SSE2_SCALAR:
         default:
             return std::make_unique<XmmRegisterAllocator>();

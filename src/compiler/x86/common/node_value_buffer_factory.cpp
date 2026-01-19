@@ -1,6 +1,8 @@
 #include "../../interfaces/node_value_buffer.hpp"
 #include "../double/scalar/scalar_node_value_buffer.hpp"
+#ifdef FORGE_BUNDLE_AVX2
 #include "../../../../backends/double/avx2/avx2_node_value_buffer.hpp"
+#endif
 #include "../../forge_engine.hpp"
 
 namespace forge {
@@ -8,19 +10,19 @@ namespace forge {
 std::unique_ptr<INodeValueBuffer> NodeValueBufferFactory::create(
     const forge::Graph& tape,
     const StitchedKernel& kernel) {
-    
+
     int vectorWidth = kernel.getVectorWidth();
-    
+
     // Use the mapping from the kernel
     const auto& mapping = kernel.getOriginalToOptimizedMapping();
-    
+
     // Create a temporary optimized tape with the correct size for the buffer
     // The buffer needs to have slots for all optimized node IDs
     forge::Graph optimizedTape;
     size_t requiredNodes = kernel.getRequiredNodes();
     optimizedTape.nodes.resize(requiredNodes);
     optimizedTape.outputs = tape.outputs; // Keep original outputs for mapping
-    
+
     // Propagate and map diff_inputs using the kernel mapping
     optimizedTape.diff_inputs.clear();
     optimizedTape.diff_inputs.reserve(tape.diff_inputs.size());
@@ -33,12 +35,16 @@ std::unique_ptr<INodeValueBuffer> NodeValueBufferFactory::create(
             }
         }
     }
-    
+
     if (vectorWidth == 1) {
         return std::make_unique<ScalarNodeValueBuffer>(optimizedTape, mapping);
     } else if (vectorWidth == 4) {
+#ifdef FORGE_BUNDLE_AVX2
         // Use the new constructor that takes exact kernel size for proper propagation
         return std::make_unique<AVX2NodeValueBuffer>(optimizedTape, mapping, requiredNodes);
+#else
+        throw std::runtime_error("AVX2 backend not bundled. Load AVX2 backend at runtime first.");
+#endif
     } else {
         throw std::runtime_error("Unsupported vector width: " + std::to_string(vectorWidth));
     }

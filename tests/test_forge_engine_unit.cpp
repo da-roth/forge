@@ -560,7 +560,9 @@ TEST(ForgeEngineTestAVX2Optimized, CompileAndExecuteWithGradient) {
 // ============================================================================
 
 #include "../src/compiler/x86/double/scalar/xmm_register_allocator.hpp"
+#ifdef FORGE_BUNDLE_AVX2
 #include "../backends/double/avx2/ymm_register_allocator.hpp"
+#endif
 
 // Test that exercises the LRU eviction path in allocateAvoiding()
 // This happens when all registers are occupied and we need to evict one
@@ -585,6 +587,7 @@ TEST(RegisterAllocatorTest, LRUEvictionPath) {
         << "Evicted register should no longer contain the old node";
 }
 
+#ifdef FORGE_BUNDLE_AVX2
 // Test YMM allocator with blacklisted registers
 TEST(RegisterAllocatorTest, YmmBlacklistAndLRU) {
     forge::YmmRegisterAllocator alloc;
@@ -607,6 +610,7 @@ TEST(RegisterAllocatorTest, YmmBlacklistAndLRU) {
     ASSERT_NE(evictedReg, 14) << "Should not allocate blacklisted YMM14";
     ASSERT_NE(evictedReg, 15) << "Should not allocate blacklisted YMM15";
 }
+#endif
 
 // Test getNodeInRegister and findNodeInRegister
 TEST(RegisterAllocatorTest, NodeTracking) {
@@ -699,8 +703,9 @@ TEST(RegisterAllocatorTest, MarkDirtyClean) {
 // Test getNumRegisters
 TEST(RegisterAllocatorTest, NumRegisters) {
     forge::XmmRegisterAllocator xmmAlloc;
-    forge::YmmRegisterAllocator ymmAlloc;
-
     EXPECT_EQ(xmmAlloc.getNumRegisters(), 16);
+#ifdef FORGE_BUNDLE_AVX2
+    forge::YmmRegisterAllocator ymmAlloc;
     EXPECT_EQ(ymmAlloc.getNumRegisters(), 16);
+#endif
 }

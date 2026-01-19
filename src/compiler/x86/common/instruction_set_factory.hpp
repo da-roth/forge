@@ -18,7 +18,9 @@
 
 #include "../../interfaces/instruction_set.hpp"
 #include "../double/scalar/sse2_scalar_instruction_set.hpp"
+#ifdef FORGE_BUNDLE_AVX2
 #include "../../../../backends/double/avx2/avx2_instruction_set.hpp"
+#endif
 #include "compiler_config.hpp"
 #include <memory>
 #include <unordered_map>
@@ -35,11 +37,39 @@
         #define NOMINMAX
     #endif
     #include <windows.h>
+    #include <intrin.h>
 #else
     #include <dlfcn.h>
+    #include <cpuid.h>
 #endif
 
 namespace forge {
+
+/**
+ * @brief Check if the CPU supports AVX2 instructions
+ * @return true if AVX2 is supported
+ */
+inline bool cpuSupportsAVX2() {
+#if defined(_WIN32)
+    int cpuInfo[4] = {0};
+    __cpuid(cpuInfo, 0);
+    int nIds = cpuInfo[0];
+    if (nIds >= 7) {
+        __cpuidex(cpuInfo, 7, 0);
+        return (cpuInfo[1] & (1 << 5)) != 0; // AVX2 bit in EBX
+    }
+    return false;
+#elif defined(__GNUC__) || defined(__clang__)
+    unsigned int eax, ebx, ecx, edx;
+    if (__get_cpuid_max(0, nullptr) >= 7) {
+        __cpuid_count(7, 0, eax, ebx, ecx, edx);
+        return (ebx & (1 << 5)) != 0; // AVX2 bit in EBX
+    }
+    return false;
+#else
+    return false; // Unknown platform, assume no AVX2
+#endif
+}
 
 /**
  * @brief Factory for creating instruction set implementations
@@ -84,7 +114,20 @@ public:
                 return std::make_unique<SSE2ScalarInstructionSet>(config);
 
             case CompilerConfig::InstructionSet::AVX2_PACKED:
+#ifdef FORGE_BUNDLE_AVX2
                 return std::make_unique<AVX2InstructionSet>(config);
+#else
+                // AVX2 not bundled - try to get from registry (loaded at runtime)
+                if (hasInstructionSet("AVX2-Packed")) {
+                    return createByName("AVX2-Packed", config, false);
+                }
+                // Fall back to SSE2-Scalar if AVX2 not available
+                return std::make_unique<SSE2ScalarInstructionSet>(config);
+#endif
+
+            case CompilerConfig::InstructionSet::AUTO:
+                // Auto-select best available instruction set based on CPU features
+                return createBest(config);
 
             // Future instruction sets will be added here by contributors
             // No modification to existing cases needed
@@ -93,6 +136,34 @@ public:
                 // Fallback to SSE2-Scalar if unknown
                 return std::make_unique<SSE2ScalarInstructionSet>(config);
         }
+    }
+
+    /**
+     * @brief Create the best available instruction set based on CPU features
+     *
+     * Automatically detects CPU capabilities and returns the most performant
+     * instruction set that is both supported by the CPU and available in the build.
+     *
+     * Priority order: AVX2 > SSE2-Scalar
+     *
+     * @param config Compiler configuration
+     * @return Best available instruction set instance
+     */
+    static std::unique_ptr<IInstructionSet> createBest(const CompilerConfig& config = CompilerConfig::Default()) {
+        // Check for AVX2 support (CPU + build)
+        if (cpuSupportsAVX2()) {
+#ifdef FORGE_BUNDLE_AVX2
+            return std::make_unique<AVX2InstructionSet>(config);
+#else
+            // AVX2 not bundled - check if loaded at runtime
+            if (hasInstructionSet("AVX2-Packed")) {
+                return createByName("AVX2-Packed", config, false);
+            }
+#endif
+        }
+
+        // Fall back to SSE2-Scalar (always available)
+        return std::make_unique<SSE2ScalarInstructionSet>(config);
     }
 
     /**

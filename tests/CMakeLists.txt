@@ -17,6 +17,11 @@ target_link_libraries(forge_tests
     gtest
 )
 
+# Pass FORGE_BUNDLE_AVX2 to tests if AVX2 is bundled
+if(FORGE_BUNDLE_AVX2)
+    target_compile_definitions(forge_tests PRIVATE FORGE_BUNDLE_AVX2)
+endif()
+
 # Set properties for better debugging and source location
 if(MSVC)
     set_target_properties(forge_tests PROPERTIES

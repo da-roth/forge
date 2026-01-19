@@ -15,6 +15,11 @@ target_link_libraries(forge_tools_tests PRIVATE
     gtest_main
 )
 
+# Pass FORGE_BUNDLE_AVX2 to tools tests if AVX2 is bundled
+if(FORGE_BUNDLE_AVX2)
+    target_compile_definitions(forge_tools_tests PRIVATE FORGE_BUNDLE_AVX2)
+endif()
+
 # Link pthread only on non-Windows platforms
 if(NOT WIN32)
     target_link_libraries(forge_tools_tests PRIVATE pthread)
