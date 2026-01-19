@@ -29,27 +29,43 @@ Forge is designed for **repeated evaluation** scenarios:
 
 ## Overview
 
-```
- 1. Input        2. Graph Pre-processing  3. Kernel Forging     4. Evaluation
-
-┌───────────┐     ┌───────────────────────────────────┐         ┌─────────────┐
-│Graph via: │     │ ┌──────────┐    ┌──────────────┐  │         │ForgedKernel:│
-│-Direct API│     │ │-CSE      │    │-Forward      │  │         │-Execute     │
-│-Overload  │──>  │ │-ConstFold│──> │-Backward     │  │  ──>    │-Values      │
-│+Custom    │     │ │-Simplify │    │ (optional)   │  │         │-Gradients   │
-└───────────┘     │ │-Stability│    │+Custom ISA   │  │         └─────────────┘
-                  │ │+Custom   │    └──────────────┘  │
-                  │ └──────────┘ 	              │
-                  │   	   ForgeEngine                │
-                  └───────────────────────────────────┘
-```
-
-| Phase | What happens | Extensibility | Reference |
-|-------|--------------|---------------|-----------|
-| **1. Input** | Build computation graph from expressions | Custom graph transformations | [Graph](src/graph/) |
-| **2. Graph Pre-processing** | Optimize: CSE, constant folding, simplification, stability | Custom optimization passes | [Optimizations](src/graph/optimizations/) |
-| **3. Kernel Forging** | Generate forward + (optional) backward machine code | Custom instruction set backends | [Backends](backends/) |
-| **4. Evaluation** | Execute kernel repeatedly with different inputs | — | [Examples](examples/) |
+<table>
+<tr>
+  <th>Phase</th>
+  <th>What happens</th>
+  <th>Details</th>
+  <th>Extensibility</th>
+  <th>Reference</th>
+</tr>
+<tr>
+  <td><b>1. Input</b></td>
+  <td>Build computation graph</td>
+  <td>Direct API, Overloading</td>
+  <td>+ Custom transformations</td>
+  <td><a href="src/graph/">Graph</a></td>
+</tr>
+<tr>
+  <td><b>2. Pre-processing</b></td>
+  <td>Optimize graph (ForgeEngine)</td>
+  <td>CSE, Const Fold, Simplify, Stability</td>
+  <td>+ Custom passes</td>
+  <td><a href="src/graph/optimizations/">Optimizations</a></td>
+</tr>
+<tr>
+  <td><b>3. Kernel Forging</b></td>
+  <td>Generate machine code (ForgeEngine)</td>
+  <td>Forward, Backward (optional)</td>
+  <td>+ Custom ISA backends</td>
+  <td><a href="backends/">Backends</a></td>
+</tr>
+<tr>
+  <td><b>4. Evaluation</b></td>
+  <td>Run compiled kernel</td>
+  <td>Execute, Values, Gradients</td>
+  <td>—</td>
+  <td><a href="examples/">Examples</a></td>
+</tr>
+</table>
 
 ## Example
 
