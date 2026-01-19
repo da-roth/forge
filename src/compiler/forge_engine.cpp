@@ -128,7 +128,7 @@ static std::string getOpName(forge::OpCode op) {
     }
 }
 
-std::unique_ptr<StitchedKernel> ForgeEngine::compile(const Graph& graph) {
+std::unique_ptr<ForgedKernel> ForgeEngine::compile(const Graph& graph) {
     using Clock = std::chrono::high_resolution_clock;
     using Duration = std::chrono::duration<double, std::milli>;
     
@@ -169,7 +169,7 @@ std::unique_ptr<StitchedKernel> ForgeEngine::compile(const Graph& graph) {
     Graph optimizedGraph = optResult.optimizedTape;
     
     // Store the mapping for later use by NodeValueBuffer
-    // This will be used when creating the StitchedKernel
+    // This will be used when creating the ForgedKernel
     
     auto optimizationEnd = Clock::now();
     Duration optimizationTime = optimizationEnd - optimizationStart;
@@ -555,7 +555,7 @@ std::unique_ptr<StitchedKernel> ForgeEngine::compile(const Graph& graph) {
     
     // Add the compiled function to runtime
     auto finalizeStart = Clock::now();
-    StitchedKernel::KernelFunc func = nullptr;
+    ForgedKernel::KernelFunc func = nullptr;
     Error err = s_runtime.add(&func, &code);
     if (err) {
         // Get detailed error information
@@ -622,7 +622,7 @@ std::unique_ptr<StitchedKernel> ForgeEngine::compile(const Graph& graph) {
               << (workingGraph.nodes.size() * 1000.0 / totalTime.count()) << " nodes/sec" << std::endl;
     }
     
-    return std::make_unique<StitchedKernel>(func, s_runtime, optimizedGraph.nodes.size(), instructionSet_.get(), config_, optResult.originalToOptimizedMapping, maxNodeIdAccessed, workingGraph.nodes.size(), workingGraph.outputs);
+    return std::make_unique<ForgedKernel>(func, s_runtime, optimizedGraph.nodes.size(), instructionSet_.get(), config_, optResult.originalToOptimizedMapping, maxNodeIdAccessed, workingGraph.nodes.size(), workingGraph.outputs);
 }
 
 } // namespace forge

@@ -24,7 +24,7 @@ bool NodeValueBufferFactory::hasBufferCreator(int vectorWidth) {
 
 std::unique_ptr<INodeValueBuffer> NodeValueBufferFactory::create(
     const forge::Graph& tape,
-    const StitchedKernel& kernel) {
+    const ForgedKernel& kernel) {
 
     int vectorWidth = kernel.getVectorWidth();
 

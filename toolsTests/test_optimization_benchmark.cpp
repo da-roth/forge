@@ -418,11 +418,11 @@ TEST_F(OptimizationBenchmark, AnalyzeUserGraph) {
     
     // Keep kernels alive for sanity checks
     std::unique_ptr<ForgeEngine> engineNoOpt;
-    std::unique_ptr<StitchedKernel> kernelNoOpt;
+    std::unique_ptr<ForgedKernel> kernelNoOpt;
     std::unique_ptr<INodeValueBuffer> workspaceNoOpt;
     
     std::unique_ptr<ForgeEngine> engineOpt;
-    std::unique_ptr<StitchedKernel> kernelOpt;
+    std::unique_ptr<ForgedKernel> kernelOpt;
     std::unique_ptr<INodeValueBuffer> workspaceOpt;
 
     // Test two configurations: No optimizations (except stability) vs All optimizations
