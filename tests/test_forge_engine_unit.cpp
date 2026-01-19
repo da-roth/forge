@@ -167,9 +167,10 @@ TEST(ForgeEngineTest, CompileAndExecuteWithGradient) {
 }
 
 // ============================================================================
-// AVX2 tests
+// AVX2 tests (only compiled when AVX2 is bundled)
 // ============================================================================
 
+#ifdef FORGE_BUNDLE_AVX2
 TEST(ForgeEngineTestAVX2, CompileAndExecuteSimpleGraph) {
     int passed = 0, failed = 0;
     std::vector<std::string> failures;
@@ -296,6 +297,7 @@ TEST(ForgeEngineTestAVX2, CompileAndExecuteWithGradient) {
     std::cout << "\n  Summary: " << passed << " passed, " << failed << " failed" << std::endl;
     EXPECT_EQ(failed, 0) << "Some graphs failed";
 }
+#endif // FORGE_BUNDLE_AVX2
 
 // ============================================================================
 // Scalar with all optimizations enabled (CompilerConfig::Fast())
@@ -428,6 +430,7 @@ TEST(ForgeEngineTestOptimized, CompileAndExecuteWithGradient) {
 // AVX2 with all optimizations enabled (CompilerConfig::Fast() + AVX2)
 // ============================================================================
 
+#ifdef FORGE_BUNDLE_AVX2
 TEST(ForgeEngineTestAVX2Optimized, CompileAndExecuteSimpleGraph) {
     int passed = 0, failed = 0;
     std::vector<std::string> failures;
@@ -554,6 +557,7 @@ TEST(ForgeEngineTestAVX2Optimized, CompileAndExecuteWithGradient) {
     std::cout << "\n  Summary: " << passed << " passed, " << failed << " failed" << std::endl;
     EXPECT_EQ(failed, 0) << "Some graphs failed";
 }
+#endif // FORGE_BUNDLE_AVX2
 
 // ============================================================================
 // Register Allocator Unit Tests

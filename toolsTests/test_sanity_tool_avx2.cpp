@@ -1,3 +1,6 @@
+// Only compile this file when AVX2 is bundled
+#ifdef FORGE_BUNDLE_AVX2
+
 #include <gtest/gtest.h>
 #include "../tools/sanityTool/sanity_checker.hpp"
 #include "../tools/testFunctions/oneToOne/all.hpp"
@@ -1609,10 +1612,12 @@ TEST_F(SanityToolAVX2Test, SimpleTranscendentalTest) {
     config.showOnlyFailures = true;
     config.timingIterations = 10;
     
-    auto checker = makeSanityChecker("Simple Transcendental", 
-                                     simpleTranscendentalTest<double>, 
-                                     simpleTranscendentalTest<fdouble>, 
+    auto checker = makeSanityChecker("Simple Transcendental",
+                                     simpleTranscendentalTest<double>,
+                                     simpleTranscendentalTest<fdouble>,
                                      std::vector<double>{100.0, 110.0},
                                      config);
     EXPECT_TRUE(checker.RunTests());
 }
+
+#endif // FORGE_BUNDLE_AVX2

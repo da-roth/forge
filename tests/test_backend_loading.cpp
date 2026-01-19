@@ -20,6 +20,7 @@
 #include "test_graphs.hpp"
 #include <cstdlib>
 #include <string>
+#include <fstream>
 
 using namespace forge;
 using namespace forge_tests;
@@ -49,6 +50,12 @@ bool shouldSkipBackendLoadingTests() {
 #endif
 }
 
+// Check if a file exists
+bool fileExists(const std::string& path) {
+    std::ifstream f(path);
+    return f.good();
+}
+
 } // anonymous namespace
 
 // Test that we can check if AVX2 is available before loading
@@ -74,6 +81,12 @@ TEST(BackendLoadingTest, LoadAVX2Backend) {
 
     std::string backendPath = getBackendPath();
     std::cout << "Attempting to load backend from: " << backendPath << std::endl;
+
+    // Skip if the backend library doesn't exist (not built)
+    if (!fileExists(backendPath)) {
+        GTEST_SKIP() << "Backend library not found at: " << backendPath
+                     << " (set FORGE_BUILD_AVX2_BACKEND=ON to build it)";
+    }
 
     // Try to load the backend
     try {
