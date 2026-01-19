@@ -1,28 +1,22 @@
 <div align="center">
   <img src="forgeGPT.png" alt="Forge Logo" width="170"/>
   <h3>FORGE — Forward & Reverse Gradient Engine</h3>
+  <p>High-performance JIT compilation for mathematical expressions with automatic differentiation</p>
 </div>
 
 <br/>
 
-FORGE is a JIT compilation engine for mathematical expressions with automatic differentiation. It follows a **record-once, compile-once, evaluate-many** paradigm: the computation graph is recorded once, compiled to optimized x86-64 machine code, and the resulting kernel can be re-evaluated with different inputs at native speed.
+Forge compiles mathematical expressions to optimized x86-64 machine code with automatic gradient computation. It follows a **record-once, compile-once, evaluate-many** paradigm designed for workloads where the same computation is repeated with varying inputs.
 
-This approach is beneficial when the same computation must be repeated many times with varying inputs — such as Monte Carlo methods, scenario evaluation, or model calibration — where the JIT compilation overhead is amortized across evaluations.
+## Key Features
 
-## When to Use Forge
+- **JIT Compilation**: Generates native x86-64 machine code via [AsmJit](https://github.com/asmjit/asmjit)
+- **Reverse-mode AD**: Automatic gradient computation for all recorded operations
+- **Graph Optimizations**: Common subexpression elimination, constant folding, algebraic simplification
+- **SIMD Backends**: SSE2 scalar (default) and AVX2 packed (4-wide), with extensible backend interface
+- **Branching Support**: Record-time conditional evaluation via `fbool` and `If()` for data-dependent control flow
 
-Forge is designed for **repeated evaluation** scenarios where the computation structure remains constant but inputs vary:
-
-- **Monte Carlo methods**: Pricing, XVA, or any path-dependent calculation
-- **Scenario evaluation**: Stress testing, what-if analysis, or parameter sweeps
-- **Greeks and sensitivities**: Fast gradient computation across market moves
-- **Model calibration**: Repeated function and gradient evaluation during parameter fitting
-
-**Trade-off**: Forge incurs an upfront compilation cost. For single evaluations, traditional tape-based AD is faster. The break-even depends on graph complexity, but typically occurs after 10–50 repeated evaluations.
-
-**Important**: The recorded computation graph must have the same structure for all inputs. For functions with branches, see [api/native/](api/native/) for how to record both paths using `fbool` and `If()`.
-
-## Quick Example
+## Example
 
 ```cpp
 #include <forge.hpp>
@@ -56,19 +50,24 @@ int main() {
 }
 ```
 
-See [examples/](examples/) for more and [api/native/](api/native/) for the full operator overloading API.
+## When to Use Forge
+
+Forge is designed for **repeated evaluation** scenarios:
+
+- **Monte Carlo methods**: Pricing, XVA, path-dependent calculations
+- **Scenario analysis**: Stress testing, what-if analysis, parameter sweeps
+- **Sensitivities**: Fast gradient computation across input variations
+- **Model calibration**: Repeated function/gradient evaluation during optimization
+
+**Trade-off**: Forge incurs upfront compilation cost. For single evaluations, tape-based AD is faster. Break-even typically occurs after 10–50 evaluations depending on graph complexity.
 
 ## Getting Started
 
 ```bash
 git clone https://github.com/da-roth/forge.git
 cd forge && mkdir build && cd build
-cmake -DCMAKE_BUILD_TYPE=Release ..
-cmake --build . -j
-ctest  # Run tests
+cmake .. && cmake --build .
 ```
-
-**Requirements:** C++17, CMake 3.20+. Dependencies (AsmJit, SLEEF, nlohmann/json, GoogleTest) are fetched automatically.
 
 **CMake integration:**
 ```cmake
@@ -76,62 +75,47 @@ add_subdirectory(forge)
 target_link_libraries(your_target PRIVATE forge::forge)
 ```
 
-## Key Features
-
-- **JIT Compilation**: Native x86-64 machine code via [AsmJit](https://github.com/asmjit/asmjit)
-- **Reverse-mode AD**: Automatic gradient computation
-- **Graph Optimizations**: CSE, constant folding, algebraic simplification
-- **Modular Backends**: SSE2 (default) + AVX2, extensible for custom SIMD
-
-## Backends
-
-Forge separates the compiler from platform-specific code generation through interfaces (`IInstructionSet`, `IRegisterAllocator`, `INodeValueBuffer`). SSE2 is always available; AVX2 is bundled by default.
-
-```cpp
-// Use AVX2 (bundled by default)
-CompilerConfig config;
-config.instructionSet = CompilerConfig::InstructionSet::AVX2_PACKED;
-ForgeEngine compiler(config);
-```
-
-### Build Options
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `FORGE_BUNDLE_AVX2` | ON | Include AVX2 in the library |
-| `FORGE_BUILD_AVX2_BACKEND` | OFF | Build AVX2 as loadable `libforge_avx2.so` |
-
-### Runtime Loading
-
-Backends can be loaded at runtime for optional acceleration or custom SIMD:
-
-```cpp
-InstructionSetFactory::loadBackend("./libforge_avx2.so");
-auto kernel = compiler.compile(graph);  // Now uses loaded backend
-```
-
-See [backends/double/avx2/](backends/double/avx2/) for implementation examples and [tests/test_backend_loading.cpp](tests/test_backend_loading.cpp) for usage.
+Requires C++17 and CMake 3.20+. All dependencies are fetched automatically.
 
 ## Documentation
 
 | Resource | Description |
 |----------|-------------|
-| [api/native/](api/native/) | `fdouble`, `fbool`, `fint` operator overloading |
-| [src/graph/graph.hpp](src/graph/graph.hpp) | Direct Graph API and `OpCode` definitions |
 | [examples/](examples/) | Working demonstrations |
-| [backends/double/avx2/](backends/double/avx2/) | Backend implementation reference |
+| [api/native/](api/native/) | `fdouble`, `fbool`, `fint` operator overloading API |
+| [src/graph/graph.hpp](src/graph/graph.hpp) | Direct Graph API and `OpCode` definitions |
+| [backends/](backends/) | Backend implementation reference |
+
+## SIMD Backends
+
+Forge supports multiple instruction set backends:
+
+```cpp
+CompilerConfig config;
+config.instructionSet = CompilerConfig::InstructionSet::AVX2_PACKED;
+ForgeEngine compiler(config);
+```
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `FORGE_BUNDLE_AVX2` | ON | Bundle AVX2 backend into library |
+| `FORGE_BUILD_AVX2_BACKEND` | OFF | Build AVX2 as loadable shared library |
+
+Backends can also be loaded at runtime:
+```cpp
+InstructionSetFactory::loadBackend("./libforge_avx2.so");
+```
 
 ## License
 
 Zlib License. See [LICENSE.md](LICENSE.md).
 
-## Authors & Maintainers
+## Related Projects
 
-- [da-roth](https://github.com/da-roth)
+- [xad-forge](https://github.com/da-roth/xad-forge) — Forge JIT backend for [XAD](https://github.com/auto-differentiation/xad)
 
 ## Acknowledgments
 
 - [AsmJit](https://github.com/asmjit/asmjit) — Machine code generation
-- [MathPresso](https://github.com/kobalicek/mathpresso) — Mathematical expression JIT compilation inspiration
-- [AutoDiffSharp](https://github.com/naasking/AutoDiffSharp) — Automatic differentiation design influence
-- [SLEEF](https://github.com/shibatch/sleef) — Vectorized math functions
+- [MathPresso](https://github.com/kobalicek/mathpresso) — JIT expression compilation inspiration
+- [SLEEF](https://github.com/shibatch/sleef) — Vectorized transcendental functions
