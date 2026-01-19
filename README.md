@@ -18,36 +18,27 @@ Forge compiles mathematical expressions to optimized x86-64 machine code with au
 
 ## Overview
 
-```mermaid
-flowchart LR
-    subgraph Input[" "]
-        A["Graph"]
-    end
+Forge processes computations through three phases:
 
-    subgraph Preprocessing[" "]
-        B["Optimizations & Cleaning"]
-    end
-
-    subgraph Forging[" "]
-        C["Forward Forging"]
-        D["Backward Forging"]
-        C --> D
-    end
-
-    E["Forged Kernel"]
-
-    A --> B --> C
-    D --> E
-
-    click Input href "src/graph/graph.hpp" "Direct API, operator overloading, or external transformation"
-    click Preprocessing href "src/graph/graph_optimizer.hpp" "CSE, constant folding, algebraic simplification"
-    click Forging href "backends/" "IInstructionSet backends for code generation"
+```
+                            ┌─────────────────────────────────────────┐
+                            │             ForgeEngine                 │
+                            │                                         │
+┌─────────────┐             │  ┌──────────────┐    ┌──────────────┐  │             ┌─────────────┐
+│             │             │  │              │    │   Forward    │  │             │             │
+│    Graph    │────────────▶│  │ Optimization │───▶│      +       │──│────────────▶│   Forged    │
+│             │             │  │              │    │   Backward   │  │             │   Kernel    │
+└─────────────┘             │  └──────────────┘    └──────────────┘  │             └─────────────┘
+                            │                                         │
+                            └─────────────────────────────────────────┘
 ```
 
-**Pipeline stages:**
-- **[Input Graph](src/graph/graph.hpp)** — Create via [Direct API](src/graph/graph.hpp), [operator overloading](api/native/) (`fdouble`), or [external transformation](https://github.com/da-roth/xad-forge)
-- **[Optimizations](src/graph/graph_optimizer.hpp)** — CSE, constant folding, algebraic simplification, dead code elimination
-- **[Code Generation](backends/)** — Forward pass + optional backward pass via pluggable `IInstructionSet` backends
+| Phase | Description | Links |
+|-------|-------------|-------|
+| **Input Graph** | Build computation graph | [Direct API](src/graph/graph.hpp), [Operator overloading](api/native/), [External (xad-forge)](https://github.com/da-roth/xad-forge) |
+| **Optimization** | CSE, constant folding, algebraic simplification | [GraphOptimizer](src/graph/graph_optimizer.hpp) |
+| **Forward + Backward** | Generate machine code via instruction set backends | [Backends](backends/) |
+| **Forged Kernel** | Executable for repeated evaluation | [ForgeEngine](src/compiler/forge_engine.hpp) |
 
 ## Example
 
