@@ -16,37 +16,70 @@ Forge compiles mathematical expressions to optimized x86-64 machine code with au
 - **SIMD Backends**: SSE2 scalar (default) and AVX2 packed (4-wide), with extensible backend interface
 - **Branching Support**: Record-time conditional evaluation via `fbool` and `If()` for data-dependent control flow
 
+## Overview
+
+```mermaid
+flowchart LR
+    subgraph Input[" "]
+        A["Graph"]
+    end
+
+    subgraph Preprocessing[" "]
+        B["Optimizations & Cleaning"]
+    end
+
+    subgraph Forging[" "]
+        C["Forward Forging"]
+        D["Backward Forging"]
+        C --> D
+    end
+
+    E["Forged Kernel"]
+
+    A --> B --> C
+    D --> E
+
+    click Input href "src/graph/graph.hpp" "Direct API, operator overloading, or external transformation"
+    click Preprocessing href "src/graph/graph_optimizer.hpp" "CSE, constant folding, algebraic simplification"
+    click Forging href "backends/" "IInstructionSet backends for code generation"
+```
+
+**Pipeline stages:**
+- **[Input Graph](src/graph/graph.hpp)** — Create via [Direct API](src/graph/graph.hpp), [operator overloading](api/native/) (`fdouble`), or [external transformation](https://github.com/da-roth/xad-forge)
+- **[Optimizations](src/graph/graph_optimizer.hpp)** — CSE, constant folding, algebraic simplification, dead code elimination
+- **[Code Generation](backends/)** — Forward pass + optional backward pass via pluggable `IInstructionSet` backends
+
 ## Example
 
 ```cpp
-#include <forge.hpp>
+#include <graph/graph.hpp>
+#include <compiler/forge_engine.hpp>
+#include <compiler/interfaces/node_value_buffer.hpp>
 
 using namespace forge;
 
 int main() {
-    // Record computation: f(x) = x² + sin(x)
-    GraphRecorder recorder;
-    recorder.start();
+    // 1. Input Graph — Build f(x) = x² + sin(x) using Direct API
+    Graph graph;
+    NodeId x = graph.addInput();
+    graph.diff_inputs.push_back(x);                        // Mark x for gradient computation
 
-    fdouble x(0.0);
-    x.markInputAndDiff();
-    fdouble result = square(x) + sin(x);
-    result.markOutput();
+    NodeId x_squared = graph.addNode({OpCode::Mul, x, x}); // x²
+    NodeId sin_x = graph.addNode({OpCode::Sin, x});        // sin(x)
+    NodeId result = graph.addNode({OpCode::Add, x_squared, sin_x});
+    graph.markOutput(result);
 
-    recorder.stop();
-    Graph graph = recorder.graph();
-
-    // Compile to machine code
-    ForgeEngine compiler;
-    auto kernel = compiler.compile(graph);
+    // 2. Forging — Compile graph (includes optimization + code generation)
+    ForgeEngine engine;
+    auto kernel = engine.compile(graph);
     auto buffer = NodeValueBufferFactory::create(graph, *kernel);
 
-    // Evaluate with different inputs
-    buffer->setValue(graph.diff_inputs[0], 2.0);
+    // 3. Execution — Evaluate repeatedly with different inputs
+    buffer->setValue(x, 2.0);
     kernel->execute(*buffer);
 
-    double f_x = buffer->getValue(graph.outputs[0]);           // f(2.0)
-    double df_dx = buffer->getGradient(graph.diff_inputs[0]);  // f'(2.0)
+    double f_x = buffer->getValue(result);    // f(2.0)
+    double df_dx = buffer->getGradient(x);    // f'(2.0)
 }
 ```
 
@@ -60,48 +93,6 @@ Forge is designed for **repeated evaluation** scenarios:
 - **Model calibration**: Repeated function/gradient evaluation during optimization
 
 **Trade-off**: Forge incurs upfront compilation cost. For single evaluations, tape-based AD is faster. Break-even typically occurs after 10–50 evaluations depending on graph complexity.
-
-## How It Works
-
-```mermaid
-flowchart LR
-    subgraph Input["Input Graph"]
-        A1["Operator Overloading"]
-        A2["Direct API"]
-        A3["External (xad-forge)"]
-    end
-
-    subgraph Engine["ForgeEngine"]
-        B["Graph Pre-processing"]
-        C["Forward Forging"]
-        D["Backward Forging"]
-    end
-
-    E["Forged Kernel"]
-
-    A1 --> B
-    A2 --> B
-    A3 --> B
-    B --> C
-    C --> D
-    D --> E
-
-    click A1 "api/native/" "fdouble, fbool, fint - natural math syntax"
-    click A2 "src/graph/graph.hpp" "Programmatic graph construction"
-    click A3 "https://github.com/da-roth/xad-forge" "Example: XAD tape transformation"
-    click B "src/graph/graph_optimizer.hpp" "CSE, constant folding, algebraic simplification"
-    click C "backends/" "IInstructionSet emits forward pass machine code"
-    click D "backends/" "IInstructionSet emits gradient machine code"
-    click E "src/compiler/forge_engine.hpp" "Ready for repeated execution"
-```
-
-| Stage | Description | Extensibility |
-|-------|-------------|---------------|
-| **Input Graph** | Three ways to create graphs | [Operator overloading](api/native/), [Direct API](src/graph/graph.hpp), [External transform](https://github.com/da-roth/xad-forge) |
-| **Graph Pre-processing** | CSE, constant folding, algebraic simplification | [GraphOptimizer](src/graph/graph_optimizer.hpp) |
-| **Forward Forging** | Generates forward pass machine code | [IInstructionSet](backends/), [ICompilationPolicy](src/compiler/interfaces/compilation_policy.hpp) |
-| **Backward Forging** | Generates gradient pass (optional) | Same interfaces as forward |
-| **Forged Kernel** | Executable kernel for repeated evaluation | — |
 
 ## Getting Started
 
