@@ -157,8 +157,8 @@ private:
     // Now creates appropriate allocator based on instruction set
     std::unique_ptr<IRegisterAllocator> createRegisterAllocator() const;
 
-    // Forward pass code generation has been migrated to forward_stitcher.cpp
-    // See ForwardStitcher class for implementation
+    // Forward pass code generation has been migrated to forward_forging.cpp
+    // See ForwardForging class for implementation
 };
 
 /**

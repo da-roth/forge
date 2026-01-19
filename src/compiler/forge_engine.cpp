@@ -13,8 +13,8 @@
 
 #include "forge_engine.hpp"
 #include "../graph/graph_optimizer.hpp"
-#include "gradient_stitcher.hpp"
-#include "forward_stitcher.hpp"
+#include "backward_forging.hpp"
+#include "forward_forging.hpp"
 #include "x86/double/scalar/sse2_scalar_instruction_set.hpp"
 #include <iostream>
 #include <iomanip>
@@ -502,7 +502,7 @@ std::unique_ptr<StitchedKernel> ForgeEngine::compile(const Graph& graph) {
         bool deferStore = !policy_->requiresStore(nodeId, workingGraph);
 
         // Generate forward operation code
-        ForwardStitcher::generateForwardOperation(a, node, nodeId, workingGraph, constantMap, constPoolLabel, regState, instructionSet_.get(), policy_.get(), deferStore);
+        ForwardForging::generateForwardOperation(a, node, nodeId, workingGraph, constantMap, constPoolLabel, regState, instructionSet_.get(), policy_.get(), deferStore);
 
         // Track maximum node ID
         maxNodeIdAccessed = std::max(maxNodeIdAccessed, nodeId);
@@ -532,7 +532,7 @@ std::unique_ptr<StitchedKernel> ForgeEngine::compile(const Graph& graph) {
         a.jz(skipGradient);  // Jump if gradients == nullptr
         
         // Generate gradient code (RSI already points to gradients)
-        GradientStitcher::stitchGradientPass(a, workingGraph, constantMap, constPoolLabel, regState, instructionSet_.get(), &config_);
+        BackwardForging::forgeBackwardPass(a, workingGraph, constantMap, constPoolLabel, regState, instructionSet_.get(), &config_);
         
         a.bind(skipGradient);
     }

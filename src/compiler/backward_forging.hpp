@@ -4,10 +4,10 @@
 // SPDX-License-Identifier: Zlib
 
 /**
- * @file gradient_stitcher.hpp
- * @brief Gradient pass code generation for automatic differentiation
+ * @file backward_forging.hpp
+ * @brief Backward forging - gradient code generation for automatic differentiation
  *
- * The GradientStitcher generates x86/x64 assembly code for computing gradients
+ * The BackwardForging generates x86/x64 assembly code for computing gradients
  * via reverse-mode automatic differentiation (backpropagation). It traverses
  * the computational graph in reverse topological order and accumulates partial
  * derivatives.
@@ -28,7 +28,7 @@
 namespace forge {
 
 /**
- * @brief Code generator for gradient computation (backpropagation)
+ * @brief Code generator for backward pass (gradient computation) (backpropagation)
  *
  * Utility class containing static methods for generating x86/x64 assembly
  * code that computes gradients via reverse-mode automatic differentiation.
@@ -36,7 +36,7 @@ namespace forge {
  *
  * API Stability: Stable - interface won't change
  */
-class GradientStitcher {
+class BackwardForging {
 public:
     /**
      * @brief Generate assembly for gradient of a single operation
@@ -85,7 +85,7 @@ public:
      *
      * Thread Safety: Not thread-safe
      */
-    static void stitchGradientPass(
+    static void forgeBackwardPass(
         asmjit::x86::Assembler& a,
         const forge::Graph& graph,
         const std::unordered_map<forge::NodeId, ForgeEngine::ConstantInfo>& constantMap,

@@ -4,10 +4,10 @@
 // SPDX-License-Identifier: Zlib
 
 /**
- * @file forward_stitcher.hpp
- * @brief Forward pass code generation for JIT compiler
+ * @file forward_forging.hpp
+ * @brief Forward forging - code generation for JIT compiler
  *
- * The ForwardStitcher generates x86/x64 assembly code for evaluating the
+ * The ForwardForging generates x86/x64 assembly code for evaluating the
  * forward pass of mathematical expression graphs. It translates graph
  * operations into optimized machine code using register allocation and
  * SIMD instructions.
@@ -37,7 +37,7 @@ namespace forge {
  *
  * API Stability: Stable - interface won't change
  */
-class ForwardStitcher {
+class ForwardForging {
 public:
     /**
      * @brief Generate assembly for a single graph operation
@@ -88,7 +88,7 @@ public:
      *
      * Thread Safety: Not thread-safe
      */
-    static void stitchForwardPass(
+    static void forgeForwardPass(
         asmjit::x86::Assembler& a,
         const forge::Graph& graph,
         const std::unordered_map<forge::NodeId, ForgeEngine::ConstantInfo>& constantMap,

@@ -4,14 +4,14 @@
 // SPDX-License-Identifier: Zlib
 
 /**
- * @file forward_stitcher.cpp
+ * @file forward_forging.cpp
  * @brief Implementation of forward pass code generation for JIT compilation
  *
  * Generates x86/x64 assembly code for the forward evaluation pass of
  * mathematical expression graphs.
  */
 
-#include "forward_stitcher.hpp"
+#include "forward_forging.hpp"
 #include <stdexcept>
 #include <iostream>
 
@@ -20,19 +20,19 @@ namespace forge {
 using namespace forge;
 using namespace asmjit;
 
-void ForwardStitcher::generatePrologue(x86::Assembler& a) {
+void ForwardForging::generatePrologue(x86::Assembler& a) {
     // This method will need the instruction set, which should be passed as a parameter
     // For now, this is a placeholder - the actual implementation will delegate to instruction set
     // This will be addressed when we refactor the call sites
 }
 
-void ForwardStitcher::generateEpilogue(x86::Assembler& a) {
+void ForwardForging::generateEpilogue(x86::Assembler& a) {
     // This method will need the instruction set, which should be passed as a parameter
     // For now, this is a placeholder - the actual implementation will delegate to instruction set
     // This will be addressed when we refactor the call sites
 }
 
-void ForwardStitcher::generateForwardOperation(
+void ForwardForging::generateForwardOperation(
     asmjit::x86::Assembler& a,
     const forge::Node& node,
     forge::NodeId nodeId,
@@ -1203,7 +1203,7 @@ void ForwardStitcher::generateForwardOperation(
     }
 }
 
-void ForwardStitcher::stitchForwardPass(
+void ForwardForging::forgeForwardPass(
     asmjit::x86::Assembler& a,
     const forge::Graph& graph,
     const std::unordered_map<forge::NodeId, ForgeEngine::ConstantInfo>& constantMap,
@@ -1217,7 +1217,7 @@ void ForwardStitcher::stitchForwardPass(
 }
 
 // Helper to ensure a value is in a register (register-aware load)
-int ForwardStitcher::ensureInRegister(
+int ForwardForging::ensureInRegister(
     asmjit::x86::Assembler& a,
     forge::NodeId nodeId,
     IRegisterAllocator& regState,

@@ -182,8 +182,8 @@ add_library(forge_core OBJECT
 
     # Compiler core (no SIMD intrinsics used)
     src/compiler/forge_engine.cpp
-    src/compiler/forward_stitcher.cpp
-    src/compiler/gradient_stitcher.cpp
+    src/compiler/forward_forging.cpp
+    src/compiler/backward_forging.cpp
     src/compiler/runtime_trace.cpp
 )
 target_include_directories(forge_core PUBLIC ${FORGE_INCLUDE_DIRS})
