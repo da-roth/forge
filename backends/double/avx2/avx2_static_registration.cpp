@@ -8,9 +8,8 @@
  * @brief Static registration of AVX2 backend when bundled
  *
  * This file is compiled only when FORGE_BUNDLE_AVX2 is ON.
- * It registers the AVX2 instruction set with the factory at static
- * initialization time, making it available via createByName("AVX2-Packed").
- * It also registers the AVX2 buffer creator with the NodeValueBufferFactory.
+ * It registers the AVX2 instruction set and buffer creator with the factories
+ * at static initialization time.
  */
 
 #include "avx2_instruction_set.hpp"
@@ -18,27 +17,42 @@
 #include "compiler/x86/common/instruction_set_factory.hpp"
 #include "compiler/interfaces/node_value_buffer.hpp"
 
-namespace {
+namespace forge {
+namespace internal {
 
-// Static registration of AVX2 instruction set
-// This runs before main() and registers AVX2 in the factory's registry
-static forge::InstructionSetRegistrar<forge::AVX2InstructionSet>
-    s_avx2Registrar("AVX2-Packed");
-
-// AVX2 buffer creator function
-std::unique_ptr<forge::INodeValueBuffer> createAVX2Buffer(
-    const forge::Graph& optimizedTape,
-    const std::vector<forge::NodeId>& mapping,
+// AVX2 buffer creator function (defined in .cpp, not header)
+static std::unique_ptr<INodeValueBuffer> createAVX2Buffer(
+    const Graph& optimizedTape,
+    const std::vector<NodeId>& mapping,
     size_t requiredNodes) {
-    return std::make_unique<forge::AVX2NodeValueBuffer>(optimizedTape, mapping, requiredNodes);
+    return std::make_unique<AVX2NodeValueBuffer>(optimizedTape, mapping, requiredNodes);
 }
 
-// Static registration of AVX2 buffer creator (vector width 4)
-struct AVX2BufferRegistrar {
-    AVX2BufferRegistrar() {
-        forge::NodeValueBufferFactory::registerBufferCreator(4, createAVX2Buffer);
+// Combined registrar for both instruction set and buffer creator
+// Using a struct ensures both registrations happen together
+struct AVX2BackendRegistrar {
+    AVX2BackendRegistrar() {
+        // Register the instruction set
+        InstructionSetFactory::registerInstructionSet(
+            "AVX2-Packed",
+            []() { return std::make_unique<AVX2InstructionSet>(); }
+        );
+
+        // Register the buffer creator for vector width 4
+        NodeValueBufferFactory::registerBufferCreator(4, createAVX2Buffer);
     }
 };
-static AVX2BufferRegistrar s_avx2BufferRegistrar;
 
-} // anonymous namespace
+// Static instance ensures registration happens at program startup
+static AVX2BackendRegistrar s_avx2BackendRegistrar;
+
+} // namespace internal
+} // namespace forge
+
+// Force the linker to include this object file even if nothing references it
+// This function is exported with C linkage to ensure the symbol is visible
+// and prevents the linker from stripping the object file
+extern "C" void forge_force_avx2_registration() {
+    // Reference the static to prevent dead code elimination
+    (void)&forge::internal::s_avx2BackendRegistrar;
+}

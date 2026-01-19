@@ -24,6 +24,11 @@
 #include <chrono>     // For timing
 #include <asmjit/core.h>
 
+// Force link AVX2 registration when bundled
+#ifdef FORGE_BUNDLE_AVX2
+extern "C" void forge_force_avx2_registration();
+#endif
+
 namespace forge {
 
 using namespace asmjit;
@@ -33,6 +38,10 @@ using namespace forge;
 asmjit::JitRuntime ForgeEngine::s_runtime;
 
 ForgeEngine::ForgeEngine() : config_(CompilerConfig::Default()) {
+#ifdef FORGE_BUNDLE_AVX2
+    // Ensure AVX2 registration is linked (prevents dead code elimination)
+    forge_force_avx2_registration();
+#endif
     // Create instruction set based on config - MUST pass the full config!
     instructionSet_ = InstructionSetFactory::create(config_.instructionSet, config_);
     // Initialize with default policy
@@ -40,6 +49,10 @@ ForgeEngine::ForgeEngine() : config_(CompilerConfig::Default()) {
 }
 
 ForgeEngine::ForgeEngine(const CompilerConfig& config) : config_(config) {
+#ifdef FORGE_BUNDLE_AVX2
+    // Ensure AVX2 registration is linked (prevents dead code elimination)
+    forge_force_avx2_registration();
+#endif
     // Create instruction set based on config
     if (config_.useNamedInstructionSet && !config_.instructionSetName.empty()) {
         // Use dynamically registered instruction set by name
