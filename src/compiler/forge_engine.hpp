@@ -19,7 +19,9 @@
 #include "../graph/graph.hpp"  // Reuse existing Graph structure
 #include "interfaces/node_value_buffer.hpp"
 #include "x86/double/scalar/xmm_register_allocator.hpp"  // For SSE2
+#ifdef FORGE_BUNDLE_AVX2
 #include "../../backends/double/avx2/ymm_register_allocator.hpp"  // For AVX2
+#endif
 #include "../graph/graph_optimizer.hpp"
 #include "x86/common/compiler_config.hpp"
 #include "interfaces/instruction_set.hpp"

@@ -7,6 +7,7 @@ add_executable(forge_tests
     test_forge_engine_unit.cpp
     test_runtime_tracer.cpp
     test_debug_helpers.cpp
+    test_backend_loading.cpp
 )
 
 # Link with Google Test and our library
@@ -16,6 +17,11 @@ target_link_libraries(forge_tests
     gtest_main
     gtest
 )
+
+# Pass FORGE_BUNDLE_AVX2 to tests if AVX2 is bundled
+if(FORGE_BUNDLE_AVX2)
+    target_compile_definitions(forge_tests PRIVATE FORGE_BUNDLE_AVX2)
+endif()
 
 # Set properties for better debugging and source location
 if(MSVC)

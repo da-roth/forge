@@ -29,26 +29,28 @@ TEST_F(RuntimeTraceTest, TestTraceBufferInitialization) {
     printTraceRecords();
 }
 
+#ifdef FORGE_BUNDLE_AVX2
 TEST_F(RuntimeTraceTest, TestAVX2InstructionSetTracing) {
     // Create AVX2 instruction set with tracing enabled
     CompilerConfig config;
     config.printRuntimeTrace = true;
-    
+
     auto avx2Set = InstructionSetFactory::create(CompilerConfig::InstructionSet::AVX2_PACKED, config);
     EXPECT_NE(avx2Set, nullptr);
     EXPECT_EQ(avx2Set->getName(), "AVX2-Packed");
-    
+
     // Test that we can create assembler and emit instructions
     asmjit::JitRuntime rt;
     asmjit::CodeHolder code;
     code.init(rt.environment());
-    
+
     asmjit::x86::Assembler a(&code);
-    
+
     // This would normally be called by the compiler
     // For now, just test that the instruction set can be created
     EXPECT_TRUE(true);
 }
+#endif // FORGE_BUNDLE_AVX2
 
 TEST_F(RuntimeTraceTest, TestSSE2InstructionSetTracing) {
     // Create SSE2 instruction set with tracing enabled

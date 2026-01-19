@@ -15,7 +15,9 @@
 #include "../../src/compiler/forge_engine.hpp"
 #include "../../src/compiler/interfaces/node_value_buffer.hpp"
 #include "../../src/compiler/x86/common/compiler_config.hpp"
+#ifdef FORGE_BUNDLE_AVX2
 #include "../../backends/double/avx2/avx2_instruction_set.hpp"
+#endif
 
 namespace forge {
 namespace tools {

@@ -127,9 +127,9 @@ public:
         : functionName_(name), funcDouble_(funcDouble), funcTP_(funcTP), 
           testInputs_(inputs), config_(config) {}
     
-    // Convenience constructor that accepts SanityConfig (for backward compatibility)
+    // Convenience constructor with individual tolerance parameters
     SanityCheckerDiff(const std::string& name, FuncDouble funcDouble, FuncTP funcTP,
-                      const std::vector<double>& inputs, 
+                      const std::vector<double>& inputs,
                       double absTol, double relTol, bool verbose = true)
         : functionName_(name), funcDouble_(funcDouble), funcTP_(funcTP), 
           testInputs_(inputs) {

@@ -167,6 +167,7 @@ TEST(DebugHelperTraceTest, SSE2_BasicTracingExample) {
 // simultaneously in YMM (256-bit) registers.
 //
 
+#ifdef FORGE_BUNDLE_AVX2
 TEST(DebugHelperTraceTest, AVX2_BasicTracingExample) {
     std::cout << "\n";
     std::cout << "============================================================\n";
@@ -255,6 +256,7 @@ TEST(DebugHelperTraceTest, AVX2_BasicTracingExample) {
 
     cleanupTraceBuffer();
 }
+#endif // FORGE_BUNDLE_AVX2
 
 // ============================================================================
 // EXAMPLE 3: Comparison - With and Without Tracing

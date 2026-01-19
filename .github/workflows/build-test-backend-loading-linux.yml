@@ -1,0 +1,167 @@
+name: Build & Test Backend Loading (Linux)
+
+on:
+  push:
+    branches: [ main, develop, 'v*' ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+jobs:
+  # Test 1: SSE2-only build (no AVX2 bundled, no AVX2 backend)
+  test-sse2-only:
+    name: SSE2-only Build
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        build_type: [Release, Debug]
+        compiler: [gcc, clang]
+        include:
+          - compiler: gcc
+            cc: gcc-13
+            cxx: g++-13
+          - compiler: clang
+            cc: clang-17
+            cxx: clang++-17
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cmake ninja-build
+
+    - name: Install GCC 13
+      if: matrix.compiler == 'gcc'
+      run: |
+        sudo apt-get install -y gcc-13 g++-13
+
+    - name: Install Clang 17
+      if: matrix.compiler == 'clang'
+      run: |
+        wget https://apt.llvm.org/llvm.sh
+        chmod +x llvm.sh
+        sudo ./llvm.sh 17
+
+    - name: Configure CMake (SSE2-only, no AVX2)
+      run: |
+        cmake -B build -S . -G Ninja \
+          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+          -DCMAKE_C_COMPILER=${{ matrix.cc }} \
+          -DCMAKE_CXX_COMPILER=${{ matrix.cxx }} \
+          -DFORGE_BUNDLE_AVX2=OFF
+      env:
+        CC: ${{ matrix.cc }}
+        CXX: ${{ matrix.cxx }}
+
+    - name: Build Forge library (SSE2-only)
+      run: cmake --build build --target forge
+
+    - name: Build Core tests
+      run: cmake --build build --target forge_tests
+
+    - name: Run Core tests (SSE2-only)
+      run: |
+        cd build
+        ctest -L Unit --output-on-failure --timeout 120
+      env:
+        CTEST_OUTPUT_ON_FAILURE: 1
+
+    - name: Upload test results on failure
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-results-sse2-only-linux-${{ matrix.compiler }}-${{ matrix.build_type }}
+        path: |
+          build/Testing/
+        retention-days: 7
+
+  # Test 2: Runtime loading of AVX2 backend
+  test-runtime-loading:
+    name: Runtime AVX2 Loading
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        build_type: [Release, Debug]
+        compiler: [gcc, clang]
+        include:
+          - compiler: gcc
+            cc: gcc-13
+            cxx: g++-13
+          - compiler: clang
+            cc: clang-17
+            cxx: clang++-17
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cmake ninja-build
+
+    - name: Install GCC 13
+      if: matrix.compiler == 'gcc'
+      run: |
+        sudo apt-get install -y gcc-13 g++-13
+
+    - name: Install Clang 17
+      if: matrix.compiler == 'clang'
+      run: |
+        wget https://apt.llvm.org/llvm.sh
+        chmod +x llvm.sh
+        sudo ./llvm.sh 17
+
+    - name: Configure CMake (unbundled AVX2 + build backend)
+      run: |
+        cmake -B build -S . -G Ninja \
+          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+          -DCMAKE_C_COMPILER=${{ matrix.cc }} \
+          -DCMAKE_CXX_COMPILER=${{ matrix.cxx }} \
+          -DFORGE_BUNDLE_AVX2=OFF \
+          -DFORGE_BUILD_AVX2_BACKEND=ON
+      env:
+        CC: ${{ matrix.cc }}
+        CXX: ${{ matrix.cxx }}
+
+    - name: Build Forge library (without bundled AVX2)
+      run: cmake --build build --target forge
+
+    - name: Build AVX2 backend shared library
+      run: cmake --build build --target forge_avx2
+
+    - name: Build Core tests
+      run: cmake --build build --target forge_tests
+
+    - name: Verify AVX2 backend exists
+      run: |
+        echo "Looking for AVX2 backend library..."
+        find build -name "libforge_avx2.so" -o -name "forge_avx2.so" | head -5
+        ls -la build/ || true
+
+    - name: Run Core tests with runtime-loaded AVX2
+      run: |
+        cd build
+        ctest -L Unit --output-on-failure --timeout 120
+      env:
+        CTEST_OUTPUT_ON_FAILURE: 1
+        FORGE_AVX2_BACKEND_PATH: ./libforge_avx2.so
+
+    - name: Upload test results on failure
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-results-runtime-loading-linux-${{ matrix.compiler }}-${{ matrix.build_type }}
+        path: |
+          build/Testing/
+          build/*.so
+        retention-days: 7

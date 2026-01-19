@@ -50,14 +50,14 @@ class AVX2InstructionSet : public X86InstructionSetBase {
 private:
     CompilerConfig config;
     InstructionTracer tracer;
-    
+
     // DEBUG: Helper functions for corruption tracking
     void emitTraceSafeYMM(asmjit::x86::Assembler& a, int regNum, const char* context);
     void emitTraceAllYMMRegisters_UNSAFE(asmjit::x86::Assembler& a, const char* context);
-    
+
 public:
     // Constructor
-    AVX2InstructionSet(const CompilerConfig& cfg = CompilerConfig::Default()) 
+    AVX2InstructionSet(const CompilerConfig& cfg = CompilerConfig::Default())
         : config(cfg), tracer(cfg) {}
     
     // Destructor - print trace records if tracing was enabled

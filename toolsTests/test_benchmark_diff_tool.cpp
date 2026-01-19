@@ -33,19 +33,21 @@ TEST_F(BenchmarkDiffToolTest, SimpleBenchmark) {
     EXPECT_TRUE(runner.RunBenchmarks());
 }
 
+#ifdef FORGE_BUNDLE_AVX2
 TEST_F(BenchmarkDiffToolTest, SimpleBenchmarkAVX2) {
     // Simple test with AVX2 SIMD configuration
     // The benchmark runner now automatically detects AVX2 and uses vectorized workspace
-    
+
     auto avx2Config = config_;
     avx2Config.compilerConfig.instructionSet = forge::CompilerConfig::InstructionSet::AVX2_PACKED;
-    
+
     auto runner = makeBenchmarkDiffRunner<double(*)(double), fdouble(*)(fdouble)>(avx2Config);
-    runner.AddFunction("Quadratic", quadratic<double>, quadratic<fdouble>, 
+    runner.AddFunction("Quadratic", quadratic<double>, quadratic<fdouble>,
                        {-2.0, -1.0, 0.0, 1.0, 2.0});
-    
+
     EXPECT_TRUE(runner.RunBenchmarks());
 }
+#endif // FORGE_BUNDLE_AVX2
 
 TEST_F(BenchmarkDiffToolTest, TrigonometricBenchmark) {
     auto runner = makeBenchmarkDiffRunner<double(*)(double), fdouble(*)(fdouble)>(config_);
@@ -174,30 +176,31 @@ TEST_F(BenchmarkDiffToolTest, AmericanOptionsBenchmark) {
     EXPECT_TRUE(runner.RunBenchmarks());
 }
 
+#ifdef FORGE_BUNDLE_AVX2
 TEST_F(BenchmarkDiffToolTest, AmericanOptionsBenchmarkAVX2) {
     // Configure for options with AVX2 SIMD vectorization
     // The benchmark runner now automatically detects AVX2 and uses vectorized workspace
     // Processing 4 inputs simultaneously with AVX2 SIMD instructions
-    
+
     auto optionConfig = config_;
     optionConfig.derivativeAbsTolerance = 1e-3;
     optionConfig.derivativeRelTolerance = 1e-3;
     optionConfig.iterations = 10;  // Fewer iterations since options are complex
     optionConfig.warmupRuns = 5;
-    
+
     // Configure compiler for AVX2 SIMD - processes 4 values in parallel
     optionConfig.compilerConfig.instructionSet = forge::CompilerConfig::InstructionSet::AVX2_PACKED;
-    
+
     auto runner = makeBenchmarkDiffRunner<double(*)(double), fdouble(*)(fdouble)>(optionConfig);
-    
+
     // Add American and European options
-    runner.AddFunction("American Put", americanPut<double>, americanPut<fdouble>, 
+    runner.AddFunction("American Put", americanPut<double>, americanPut<fdouble>,
                        {80.0, 90.0, 100.0, 110.0, 120.0});
-    runner.AddFunction("American Call", americanCall<double>, americanCall<fdouble>, 
+    runner.AddFunction("American Call", americanCall<double>, americanCall<fdouble>,
                        {80.0, 90.0, 100.0, 110.0, 120.0});
-    runner.AddFunction("European Put", europeanPut<double>, europeanPut<fdouble>, 
+    runner.AddFunction("European Put", europeanPut<double>, europeanPut<fdouble>,
                        {80.0, 90.0, 100.0, 110.0, 120.0});
-    
+
     // When AVX2_PACKED is detected, the benchmark runner should output additional SIMD comparison:
     // | Mode                    | Inputs | Forward(ns) | +Backward(ns) | Total(ns) | vs Native |
     // |-------------------------|--------|-------------|---------------|-----------|-----------|
@@ -207,9 +210,10 @@ TEST_F(BenchmarkDiffToolTest, AmericanOptionsBenchmarkAVX2) {
     // | SSE2 JIT (scalar+grad)  |      1 |           - |        XXX.XX |    XXX.XX |    XX.XXx |
     // | AVX2 JIT (4x SIMD)      |      4 |      XXX.XX |             - |    XXX.XX |     X.XXx |
     // | AVX2 JIT (4x SIMD+grad) |      4 |           - |        XXX.XX |    XXX.XX |    XX.XXx |
-    
+
     EXPECT_TRUE(runner.RunBenchmarks());
 }
+#endif // FORGE_BUNDLE_AVX2
 
 TEST_F(BenchmarkDiffToolTest, SmallIterativeGraphBenchmark) {
     // Configure for small iterative graph testing

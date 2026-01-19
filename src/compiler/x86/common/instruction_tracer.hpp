@@ -220,7 +220,7 @@ public:
         // liveReg remains completely unchanged and can be used normally
     }
 
-    // Legacy methods for backward compatibility - delegate to unified emitTrace
+    // Convenience methods for specific register types
     void emitTraceYMM(asmjit::x86::Assembler& a, asmjit::x86::Vec liveReg,
                       OperationType opType, int vectorWidth = 4, int nodeId = -1, int srcReg = -1, int dstReg = -1) {
         emitTrace(a, liveReg.ymm(), opType, vectorWidth, nodeId, srcReg, dstReg);

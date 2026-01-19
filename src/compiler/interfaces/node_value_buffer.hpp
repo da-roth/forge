@@ -25,18 +25,15 @@ class StitchedKernel;
  *
  * == API Design ==
  *
- * Primary API (Lanes): Raw pointer interface for performance-critical code.
- *   - setLanes(nodeId, ptr)           - Set all SIMD lanes from array
- *   - getLanes(nodeId, ptr)           - Get all SIMD lanes to array
- *   - getGradientLanes(indices, ptr)  - Get gradients (interleaved, adapts to vector width)
- *
- * Deprecated API: Convenience wrappers that internally call Lanes methods.
- *   - setValue(nodeId, value)         - Broadcasts to all lanes
+ * Simple API: Single-value interface for ease of use.
+ *   - setValue(nodeId, value)         - Broadcasts to all SIMD lanes
  *   - getValue(nodeId)                - Returns lane 0
  *   - getGradient(nodeId)             - Returns lane 0 gradient
  *
- * The deprecated methods will be removed in a future version.
- * Migrate to the Lanes API for better performance.
+ * Lanes API: Raw pointer interface for performance-critical code.
+ *   - setLanes(nodeId, ptr)           - Set all SIMD lanes from array
+ *   - getLanes(nodeId, ptr)           - Get all SIMD lanes to array
+ *   - getGradientLanes(indices, ptr)  - Get gradients (interleaved, adapts to vector width)
  */
 class INodeValueBuffer {
 public:
@@ -85,28 +82,22 @@ public:
     virtual void getValueLanes(const std::vector<size_t>& bufferIndices, double* output) const = 0;
 
     // ==========================================================================
-    // DEPRECATED API: Convenience wrappers (internally use Lanes)
+    // SIMPLE API: Single-value convenience methods
     // ==========================================================================
 
     /**
-     * @deprecated Use setLanes() for better performance.
      * Set a single value, broadcast to all SIMD lanes.
      */
-    [[deprecated("Use setLanes() for better performance")]]
     virtual void setValue(uint64_t nodeId, double value) = 0;
 
     /**
-     * @deprecated Use getLanes() for better performance.
      * Get a single value (lane 0).
      */
-    [[deprecated("Use getLanes() for better performance")]]
     virtual double getValue(uint64_t nodeId) const = 0;
 
     /**
-     * @deprecated Use getGradientLanes() for better performance.
      * Get gradient for a single node (lane 0).
      */
-    [[deprecated("Use getGradientLanes() for better performance")]]
     virtual double getGradient(forge::NodeId node) const = 0;
 
     // ==========================================================================
@@ -284,7 +275,7 @@ public:
     }
 
     // ==========================================================================
-    // DEPRECATED API: Convenience wrappers (internally use Lanes)
+    // SIMPLE API: Single-value convenience methods
     // ==========================================================================
 
     void setValue(uint64_t nodeId, double value) override {
@@ -388,13 +379,38 @@ protected:
 };
 
 /**
- * Factory for creating appropriate NodeValueBuffer based on kernel requirements
+ * Factory for creating appropriate NodeValueBuffer based on kernel requirements.
+ * Uses a registration pattern so SIMD backends can register their buffer creators
+ * without requiring the factory to include backend-specific headers directly.
  */
 class NodeValueBufferFactory {
 public:
+    /** Function signature for buffer creators */
+    using BufferCreatorFunc = std::unique_ptr<INodeValueBuffer>(*)(
+        const forge::Graph& optimizedTape,
+        const std::vector<forge::NodeId>& mapping,
+        size_t requiredNodes);
+
+    /**
+     * Create a buffer appropriate for the kernel's vector width.
+     * For vectorWidth > 1, requires a buffer creator to be registered for that width.
+     */
     static std::unique_ptr<INodeValueBuffer> create(
         const forge::Graph& tape,
         const StitchedKernel& kernel);
+
+    /**
+     * Register a buffer creator for a specific vector width.
+     * Called by backend static initialization when bundled, or when loaded at runtime.
+     * @param vectorWidth The SIMD vector width (e.g., 4 for AVX2, 8 for AVX-512)
+     * @param creator Function that creates buffers for this vector width
+     */
+    static void registerBufferCreator(int vectorWidth, BufferCreatorFunc creator);
+
+    /**
+     * Check if a buffer creator is registered for a vector width.
+     */
+    static bool hasBufferCreator(int vectorWidth);
 };
 
 } // namespace forge
