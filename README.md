@@ -46,10 +46,10 @@ Forge is designed for **repeated evaluation** scenarios:
 
 | Phase | What happens | Extensibility | Reference |
 |-------|--------------|---------------|-----------|
-| **1. Input** | Build computation graph from expressions | Custom graph transformations | [Direct API](src/graph/), [Overloading](api/native/) |
-| **2. Pre-processing** | Optimize graph: CSE, constant folding, algebraic simplification, stability cleaning | Custom optimization passes | [Optimizations](src/graph/optimizations/) |
-| **3. Forging** | Generate native machine code for forward pass and (optional) backward pass | Custom instruction set backends | [Backends](backends/) |
-| **4. Evaluation** | Execute compiled kernel repeatedly with different inputs | — | [Examples](examples/) |
+| **1. Input** | Build computation graph from expressions | Custom graph transformations | [Graph](src/graph/) |
+| **2. Pre-processing** | Optimize: CSE, constant folding, simplification, stability | Custom optimization passes | [Optimizations](src/graph/optimizations/) |
+| **3. Forging** | Generate forward + (optional) backward machine code | Custom instruction set backends | [Backends](backends/) |
+| **4. Evaluation** | Execute kernel repeatedly with different inputs | — | [Examples](examples/) |
 
 ## Example
 
