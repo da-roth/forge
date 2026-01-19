@@ -44,15 +44,15 @@ Forge is designed for **repeated evaluation** scenarios:
 </tr>
 <tr>
   <td><a href="backends/"><b>3. Kernel Forging</b></a></td>
-  <td>ForgeEngine compiles optimized graph to native machine code for forward pass and optional backward pass (gradients) using pluggable instruction set backends</td>
+  <td>ForgeEngine compiles optimized graph to native machine code via forward forging and optional backward forging (for gradients) using pluggable instruction set backends</td>
 </tr>
 <tr>
   <td><a href="examples/"><b>4. Execution</b></a></td>
-  <td>Execute the compiled kernel repeatedly with varying inputs; retrieve computed values and gradients</td>
+  <td>Execute the ForgedKernel repeatedly with varying inputs; retrieve computed values and gradients</td>
 </tr>
 </table>
 
-*Extensibility: Phases 1-3 support custom extensions — graph transformations, optimization passes, and instruction set backends respectively.*
+*Extensibility: Custom graph transformations (1), optimization passes (2), instruction set backends with custom machine code and register management (3).*
 
 ## Example
 
