@@ -26,7 +26,7 @@ Forge is designed for **repeated evaluation** scenarios where the computation st
 
 - **JIT Compilation**: Native x86-64 machine code eliminates interpretation overhead
 - **Reverse-mode AD**: Automatic gradient computation with full reverse-mode differentiation
-- **SIMD Vectorization**: AVX2 and SSE2 support for parallel evaluation
+- **Modular Backends**: SSE2 standard backend with optional AVX2 acceleration
 - **Graph Optimization**: CSE, algebraic simplification, constant folding, stability cleaning
 
 ## Integration
@@ -83,6 +83,60 @@ FORGE uses a three-stage pipeline:
 3. **JIT Compilation**: Generates optimized forward + gradient x86-64 machine code via AsmJit
 
 The resulting kernel can be executed repeatedly with different input values at native performance.
+
+## Backend Architecture
+
+Forge uses a modular backend system that separates the compilation engine from platform-specific code generation. The engine works with abstract interfaces, allowing backends to be added without modifying core compiler code.
+
+### Standard Backend (SSE2)
+
+The SSE2 backend is included by default and works on all x86-64 processors:
+
+```cpp
+CompilerConfig config;  // Uses SSE2 by default
+ForgeEngine compiler(config);
+auto kernel = compiler.compile(graph);
+```
+
+### AVX2 Backend
+
+AVX2 support demonstrates how backends extend the system. Each backend implements three interfaces:
+
+| Interface | Purpose | AVX2 Implementation |
+|-----------|---------|---------------------|
+| `IInstructionSet` | Code generation | `AVX2InstructionSet` - emits AVX2 instructions |
+| `IRegisterAllocator` | Register management | `YmmRegisterAllocator` - manages YMM registers |
+| `INodeValueBuffer` | Value storage | `AVX2NodeValueBuffer` - 4-wide SIMD layout |
+
+To use AVX2:
+
+```cpp
+CompilerConfig config;
+config.instructionSet = CompilerConfig::InstructionSet::AVX2_PACKED;
+ForgeEngine compiler(config);
+auto kernel = compiler.compile(graph);  // Generates AVX2 code
+```
+
+### Backend Components
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    Forge Engine                         │
+│              (backend-agnostic compiler)                │
+└────────────────────────┬────────────────────────────────┘
+                         │
+              ┌──────────┴──────────┐
+              ▼                     ▼
+       ┌────────────┐        ┌────────────┐
+       │    SSE2    │        │    AVX2    │
+       │  (standard)│        │ (extension)│
+       └────────────┘        └────────────┘
+```
+
+Each backend provides:
+- **Instruction Set**: Emits platform-specific machine code (arithmetic, transcendentals, memory ops)
+- **Register Allocator**: Manages the platform's vector registers (XMM vs YMM)
+- **Value Buffer**: Handles memory layout matching the SIMD width (1 vs 4 doubles)
 
 ## Build Instructions
 
