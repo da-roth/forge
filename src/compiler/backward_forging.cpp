@@ -184,7 +184,7 @@ void BackwardForging::generateGradientOperation(
         case OpCode::Abs:
             // grad[a] += sign(value[a]) * grad[nodeId]
             // sign(x) = 1 if x > 0, -1 if x < 0, 0 if x == 0
-            // Using bit manipulation approach (same as forward stitcher for Abs)
+            // Using bit manipulation approach (same as forward forging for Abs)
             // This works correctly for both SSE2 and AVX2
             if (node.a < graph.nodes.size() && graph.nodes[node.a].needsGradient) {
                 instructionSet->emitLoadValueForGradient(a, 1, node.a, graph, &constantMap, constPoolLabel);
