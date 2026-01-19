@@ -30,11 +30,11 @@ Forge compiles mathematical expressions to optimized x86-64 machine code with au
 
                       ┌─────────────────────────────────────┐
 ┌────────────┐        │           ForgeEngine               │        ┌──────────────┐
-│ Entry via: │        │ ┌─────────────┐   ┌──────────────┐ │        │              │
-│ Direct API │───────▶│ │ CSE         │──▶│   Forward    │ │───────▶│Forged Kernel │
-│ Overloading│        │ │ Const Fold  │   │      +       │ │        │              │
-│ External   │        │ │ Simplify    │   │Backward (opt)│ │        └──────────────┘
-└────────────┘        │ └─────────────┘   └──────────────┘ │
+│ Entry via: │        │ ┌─────────────┐   ┌──────────────┐ │        │Forged Kernel:│
+│- Direct API│───────▶│ │- CSE        │──▶│- Forward     │ │───────▶│- Execute     │
+│- Overload  │        │ │- Const Fold │   │- Backward    │ │        │- Get values  │
+│- External  │        │ │- Simplify   │   │  (optional)  │ │        │- Get grads   │
+└────────────┘        │ └─────────────┘   └──────────────┘ │        └──────────────┘
                       └─────────────────────────────────────┘
 ```
 
