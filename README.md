@@ -18,25 +18,27 @@ Forge compiles mathematical expressions to optimized x86-64 machine code with au
 
 ## Overview
 
-| Phase | Description | Reference |
-|-------|-------------|-----------|
-| **1. Input** | Build computation graph | [graph.hpp](src/graph/graph.hpp) |
-| **2. Pre-processing** | CSE, constant folding, simplification | [graph_optimizer.hpp](src/graph/graph_optimizer.hpp) |
-| **3. Forging** | Generate forward + backward (optional) code | [backends/](backends/) |
-| **4. Evaluation** | Run kernel repeatedly with different inputs | [forge_engine.hpp](src/compiler/forge_engine.hpp) |
-
 ```
-  1. Input            2. Pre-processing       3. Forging              4. Evaluation
+  1. Input             2. Pre-processing        3. Forging             4. Evaluation
 
-                      ┌─────────────────────────────────────┐
-┌────────────┐        │           ForgeEngine               │        ┌──────────────┐
-│ Entry via: │        │ ┌─────────────┐   ┌──────────────┐ │        │Forged Kernel:│
-│- Direct API│───────▶│ │- CSE        │──▶│- Forward     │ │───────▶│- Execute     │
-│- Overload  │        │ │- Const Fold │   │- Backward    │ │        │- Get values  │
-│- External  │        │ │- Simplify   │   │  (optional)  │ │        │- Get grads   │
-└────────────┘        │ └─────────────┘   └──────────────┘ │        └──────────────┘
+┌────────────┐        ┌─────────────────────────────────────┐        ┌──────────────┐
+│ Graph via: │        │ ┌─────────────┐   ┌──────────────┐ │        │Forged Kernel:│
+│- Direct API│        │ │- CSE        │   │- Forward     │ │        │- Execute     │
+│- Overload  │───────▶│ │- Const Fold │──▶│- Backward    │ │───────▶│- Values      │
+│- External  │        │ │- Simplify   │   │  (optional)  │ │        │- Gradients   │
+│+ Custom    │        │ │- Stability  │   │+ Custom ISA  │ │        └──────────────┘
+└────────────┘        │ │+ Custom     │   └──────────────┘ │
+                      │ └─────────────┘                     │
+                      │           ForgeEngine               │
                       └─────────────────────────────────────┘
 ```
+
+| Phase | What happens | Extensibility | Reference |
+|-------|--------------|---------------|-----------|
+| **1. Input** | Build computation graph from expressions | Custom graph transformations | [Graph API](src/graph/) |
+| **2. Pre-processing** | Optimize graph: CSE, constant folding, algebraic simplification, stability cleaning | Custom optimization passes | [Optimizations](src/graph/optimizations/) |
+| **3. Forging** | Generate native machine code for forward pass and (optional) backward pass | Custom instruction set backends | [Backends](backends/) |
+| **4. Evaluation** | Execute compiled kernel repeatedly with different inputs | — | [Examples](examples/) |
 
 ## Example
 
