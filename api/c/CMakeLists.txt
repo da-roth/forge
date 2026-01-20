@@ -47,9 +47,10 @@ if(MSVC)
     set(FORGE_USE_STATIC_RUNTIME ${FORGE_CAPI_USE_STATIC_RUNTIME} CACHE BOOL "" FORCE)
 endif()
 
-# Symbol visibility
-set(CMAKE_CXX_VISIBILITY_PRESET hidden)
-set(CMAKE_VISIBILITY_INLINES_HIDDEN ON)
+# Symbol visibility - export C++ symbols so loadable backends can link against them
+# (Changed from 'hidden' to 'default' to allow backends to use X86InstructionSetBase etc.)
+set(CMAKE_CXX_VISIBILITY_PRESET default)
+set(CMAKE_VISIBILITY_INLINES_HIDDEN OFF)
 
 # Include directories
 include(GNUInstallDirs)
