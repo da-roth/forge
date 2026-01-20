@@ -122,12 +122,8 @@ target_link_libraries(forge_capi PRIVATE forge)
 # for the OBJECT library pattern used for the main Forge library.
 #
 
-# On Linux/macOS, hide all symbols except the C API
-if(NOT WIN32)
-    target_link_options(forge_capi PRIVATE
-        -Wl,--exclude-libs,ALL
-    )
-endif()
+# NOTE: We do NOT hide internal C++ symbols (--exclude-libs,ALL removed)
+# and share C++ class implementations, avoiding ABI issues with duplicate code.
 
 # Set output name
 set_target_properties(forge_capi PROPERTIES
