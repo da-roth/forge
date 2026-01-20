@@ -123,6 +123,7 @@ target_link_libraries(forge_capi PRIVATE forge)
 #
 
 # NOTE: We do NOT hide internal C++ symbols (--exclude-libs,ALL removed)
+# This allows loadable backends to link against libforge_capi.so
 # and share C++ class implementations, avoiding ABI issues with duplicate code.
 
 # Set output name
