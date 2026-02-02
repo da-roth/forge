@@ -102,7 +102,7 @@ target_include_directories(forge_capi PUBLIC
 )
 
 # Link forge and its dependencies statically into the shared library
-target_link_libraries(forge_capi PRIVATE forge)
+target_link_libraries(forge_capi PRIVATE forge ${CMAKE_DL_LIBS})
 
 ##############################################################################
 # Per-file compile options for instruction-set-specific implementations
