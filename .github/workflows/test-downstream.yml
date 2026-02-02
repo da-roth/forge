@@ -102,13 +102,23 @@ jobs:
           ctest --output-on-failure
 
   ##############################################################################
-  # Linux - GCC (representative config: GCC 13, C++17)
+  # Linux - GCC (representative configs: GCC 9 for old glibc, GCC 13 for new)
   ##############################################################################
   linux-gcc:
+    strategy:
+      fail-fast: false
+      matrix:
+        version: ["9", "13"]
+        include:
+          - version: "9"
+            name_suffix: "(old glibc)"
+          - version: "13"
+            name_suffix: "(new glibc)"
+
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/foonathan/gcc:13
-    name: xad-forge / Linux GCC
+      image: ghcr.io/foonathan/gcc:${{ matrix.version }}
+    name: xad-forge / Linux GCC ${{ matrix.version }} ${{ matrix.name_suffix }}
 
     steps:
       - name: Setup
@@ -178,13 +188,23 @@ jobs:
           ctest --output-on-failure
 
   ##############################################################################
-  # Linux - Clang (representative config: Clang 17, C++17)
+  # Linux - Clang (representative configs: Clang 13 for old glibc, Clang 17 for new)
   ##############################################################################
   linux-clang:
+    strategy:
+      fail-fast: false
+      matrix:
+        version: ["13", "17"]
+        include:
+          - version: "13"
+            name_suffix: "(old glibc)"
+          - version: "17"
+            name_suffix: "(new glibc)"
+
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/foonathan/clang:17
-    name: xad-forge / Linux Clang
+      image: ghcr.io/foonathan/clang:${{ matrix.version }}
+    name: xad-forge / Linux Clang ${{ matrix.version }} ${{ matrix.name_suffix }}
 
     steps:
       - name: Setup
