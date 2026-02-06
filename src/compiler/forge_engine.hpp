@@ -33,6 +33,7 @@
 #include <vector>
 #include <unordered_map>
 #include <unordered_set>
+#include <cstdio>  // For dumpCode()
 #include <cmath>
 #include <algorithm>
 #include <iostream>
@@ -185,22 +186,24 @@ public:
     /** @brief Function signature for compiled kernels */
     using KernelFunc = void(*)(double* values, double* gradients, size_t count);
 
-    ForgedKernel(KernelFunc func, asmjit::JitRuntime& runtime, size_t num_nodes, const IInstructionSet* instructionSet, const CompilerConfig& config, size_t max_node_id = 0, size_t working_nodes = 0)
+    ForgedKernel(KernelFunc func, asmjit::JitRuntime& runtime, size_t num_nodes, const IInstructionSet* instructionSet, const CompilerConfig& config, size_t max_node_id = 0, size_t working_nodes = 0, size_t code_size = 0)
         : func_(func), runtime_(&runtime), num_nodes_(num_nodes),
           vector_width_(instructionSet->getVectorWidth()),
           instruction_set_name_(instructionSet->getName()),
-          config_(config), max_node_id_(max_node_id), working_nodes_(working_nodes > 0 ? working_nodes : num_nodes) {}
+          config_(config), max_node_id_(max_node_id), working_nodes_(working_nodes > 0 ? working_nodes : num_nodes),
+          code_size_(code_size) {}
 
     // Constructor with node ID mapping
     ForgedKernel(KernelFunc func, asmjit::JitRuntime& runtime, size_t num_nodes, const IInstructionSet* instructionSet, const CompilerConfig& config,
                    const std::vector<forge::NodeId>& originalToOptimizedMapping, size_t max_node_id = 0, size_t working_nodes = 0,
-                   const std::vector<forge::NodeId>& outputNodes = {})
+                   const std::vector<forge::NodeId>& outputNodes = {}, size_t code_size = 0)
         : func_(func), runtime_(&runtime), num_nodes_(num_nodes),
           vector_width_(instructionSet->getVectorWidth()),
           instruction_set_name_(instructionSet->getName()),
           config_(config),
           max_node_id_(max_node_id), working_nodes_(working_nodes > 0 ? working_nodes : num_nodes),
-          originalToOptimizedMapping_(originalToOptimizedMapping), outputNodes_(outputNodes) {
+          originalToOptimizedMapping_(originalToOptimizedMapping), outputNodes_(outputNodes),
+          code_size_(code_size) {
         // std::cout << "[KERNEL CONSTRUCTOR] num_nodes=" << num_nodes_
         //           << ", max_node_id=" << max_node_id_
         //           << ", working_nodes=" << working_nodes_
@@ -369,7 +372,30 @@ public:
     const std::vector<forge::NodeId>& getOriginalToOptimizedMapping() const {
         return originalToOptimizedMapping_;
     }
-    
+
+    /**
+     * @brief Get compiled code size in bytes
+     * @return Size of the compiled kernel code
+     */
+    size_t getCodeSize() const { return code_size_; }
+
+    /**
+     * @brief Dump compiled kernel code to a binary file
+     * @param filepath Path to output file (e.g., "/tmp/kernel.bin")
+     * @return true on success, false on failure
+     *
+     * The dumped binary can be disassembled with:
+     *   objdump -D -b binary -m i386:x86-64 -M intel <filepath>
+     */
+    bool dumpCode(const char* filepath) const {
+        if (!func_ || code_size_ == 0) return false;
+        FILE* f = fopen(filepath, "wb");
+        if (!f) return false;
+        size_t written = fwrite(reinterpret_cast<const void*>(func_), 1, code_size_, f);
+        fclose(f);
+        return written == code_size_;
+    }
+
     // Disable copy
     ForgedKernel(const ForgedKernel&) = delete;
     ForgedKernel& operator=(const ForgedKernel&) = delete;
@@ -382,12 +408,14 @@ public:
           config_(other.config_),
           max_node_id_(other.max_node_id_), working_nodes_(other.working_nodes_),
           originalToOptimizedMapping_(std::move(other.originalToOptimizedMapping_)),
-          outputNodes_(std::move(other.outputNodes_)) {
+          outputNodes_(std::move(other.outputNodes_)),
+          code_size_(other.code_size_) {
         other.func_ = nullptr;
         other.runtime_ = nullptr;
         other.vector_width_ = 0;
         other.max_node_id_ = 0;
         other.working_nodes_ = 0;
+        other.code_size_ = 0;
     }
 
 private:
@@ -401,6 +429,7 @@ private:
     size_t working_nodes_;         // Working graph size (after optimizations)
     std::vector<forge::NodeId> originalToOptimizedMapping_;  // Node ID mapping
     std::vector<forge::NodeId> outputNodes_;  // Output node IDs (for debug display)
+    size_t code_size_ = 0;         // Size of compiled code in bytes
 };
 
 } // namespace forge

@@ -338,6 +338,22 @@ FORGE_API int forge_kernel_get_vector_width(ForgeKernelHandle kernel);
  */
 FORGE_API size_t forge_kernel_get_required_nodes(ForgeKernelHandle kernel);
 
+/**
+ * Get the compiled code size in bytes.
+ */
+FORGE_API size_t forge_kernel_get_code_size(ForgeKernelHandle kernel);
+
+/**
+ * Dump compiled kernel code to a binary file.
+ * @param kernel The compiled kernel
+ * @param filepath Path to output file
+ * @return FORGE_SUCCESS on success, error code on failure
+ *
+ * The dumped binary can be disassembled with:
+ *   objdump -D -b binary -m i386:x86-64 -M intel <filepath>
+ */
+FORGE_API ForgeError forge_kernel_dump_code(ForgeKernelHandle kernel, const char* filepath);
+
 /* ==========================================================================
  * Buffer API
  * ========================================================================== */

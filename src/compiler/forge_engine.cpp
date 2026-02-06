@@ -556,6 +556,7 @@ std::unique_ptr<ForgedKernel> ForgeEngine::compile(const Graph& graph) {
     // Add the compiled function to runtime
     auto finalizeStart = Clock::now();
     ForgedKernel::KernelFunc func = nullptr;
+    size_t codeSize = code.codeSize();  // Capture code size before adding to runtime
     Error err = s_runtime.add(&func, &code);
     if (err) {
         // Get detailed error information
@@ -622,7 +623,7 @@ std::unique_ptr<ForgedKernel> ForgeEngine::compile(const Graph& graph) {
               << (workingGraph.nodes.size() * 1000.0 / totalTime.count()) << " nodes/sec" << std::endl;
     }
     
-    return std::make_unique<ForgedKernel>(func, s_runtime, optimizedGraph.nodes.size(), instructionSet_.get(), config_, optResult.originalToOptimizedMapping, maxNodeIdAccessed, workingGraph.nodes.size(), workingGraph.outputs);
+    return std::make_unique<ForgedKernel>(func, s_runtime, optimizedGraph.nodes.size(), instructionSet_.get(), config_, optResult.originalToOptimizedMapping, maxNodeIdAccessed, workingGraph.nodes.size(), workingGraph.outputs, codeSize);
 }
 
 } // namespace forge

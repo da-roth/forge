@@ -470,6 +470,27 @@ FORGE_API size_t forge_kernel_get_required_nodes(ForgeKernelHandle kernel) {
     return kernel->kernel->getRequiredNodes();
 }
 
+FORGE_API size_t forge_kernel_get_code_size(ForgeKernelHandle kernel) {
+    if (!kernel || !kernel->kernel) return 0;
+    return kernel->kernel->getCodeSize();
+}
+
+FORGE_API ForgeError forge_kernel_dump_code(ForgeKernelHandle kernel, const char* filepath) {
+    if (!kernel || !kernel->kernel) {
+        set_error("Null kernel handle");
+        return FORGE_ERROR_NULL_HANDLE;
+    }
+    if (!filepath) {
+        set_error("Null filepath");
+        return FORGE_ERROR_INVALID_ARGUMENT;
+    }
+    if (!kernel->kernel->dumpCode(filepath)) {
+        set_error("Failed to dump kernel code");
+        return FORGE_ERROR_INVALID_ARGUMENT;
+    }
+    return FORGE_SUCCESS;
+}
+
 // ==========================================================================
 // Buffer API
 // ==========================================================================
